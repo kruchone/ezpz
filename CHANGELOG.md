@@ -1,5 +1,7 @@
 # Changelog
 
+## Unreleased
+
 ## 1.1.0
 
 - Backups: choose ezpz, Project Zomboid's built-in backups, or both, and set each side's options in one place (PZ's are written to the server config). ezpz can also back up every N hours while the server runs. Both kinds appear in one list with what each contains and the world version, and either kind can be restored. A restore now only replaces what the backup contains, so a config-only backup leaves the world alone. The Console page's back-up-on-start option moved to the Backups page.
