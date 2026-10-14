@@ -114,7 +114,8 @@ namespace Ezpz
             Section(f, "Moderation");
             Line(f, Btn("Kick…", (s, e) => Kick()), Btn("Ban…", (s, e) => Ban(false)), Btn("Ban + IP…", (s, e) => Ban(true)), Btn("Unban", (s, e) => PCmd("unbanuser \"{0}\"")));
             Line(f, Btn("Mute voice", (s, e) => PCmd("voiceban \"{0}\" -true")), Btn("Unmute voice", (s, e) => PCmd("voiceban \"{0}\" -false")));
-            Line(f, Btn("Set password…", (s, e) => SetPassword()), Btn("Remove from whitelist", (s, e) => { if (ConfirmSel("Remove {0} from the whitelist? They won't be able to log in on a whitelist-only server.")) PCmd("removeuserfromwhitelist \"{0}\""); }));
+            Line(f, Btn("View logs", (s, e) => { if (NeedSel()) ShowLogsFor(Sel); }), Btn("Set password…", (s, e) => SetPassword()));
+            Line(f, Btn("Remove from whitelist", (s, e) => { if (ConfirmSel("Remove {0} from the whitelist? They won't be able to log in on a whitelist-only server.")) PCmd("removeuserfromwhitelist \"{0}\""); }));
 
             Section(f, "Admin powers");
             Line(f, Lbl("God mode"), Btn("On", (s, e) => PCmd("godmodeplayer \"{0}\" -true")), Btn("Off", (s, e) => PCmd("godmodeplayer \"{0}\" -false")));
@@ -200,6 +201,7 @@ namespace Ezpz
             m.Items.Add("God mode off", null, (s, e) => PCmd("godmodeplayer \"{0}\" -false"));
             m.Items.Add("Lightning strike", null, (s, e) => PCmd("lightning \"{0}\""));
             m.Items.Add(new ToolStripSeparator());
+            m.Items.Add("View this player's logs", null, (s, e) => { if (Sel != null) ShowLogsFor(Sel); });
             m.Items.Add("Copy name", null, (s, e) => { if (Sel != null) Clipboard.SetText(Sel); });
             m.Items.Add("Copy Steam ID", null, (s, e) =>
             {

@@ -38,6 +38,7 @@ namespace Ezpz
                     gcReader.Read(S.GcLogPath);
                 }),
                 Step("Listing backups", () => RefreshBackupList()),
+                Step("Reading the server's logs", () => { logAll = logData.Load(S, perkNames); logLoadedAt = DateTime.Now; FilterLogs(); }),
                 Step("Checking Windows Firewall", () => firewallOk = CheckFirewall()),
                 // Windows only creates a control's on-screen window the first time it's shown, which is what made
                 // big pages (Sandbox has ~1,100 controls) freeze on first open. Create them all now, behind the splash.

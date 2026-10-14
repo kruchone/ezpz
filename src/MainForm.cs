@@ -72,6 +72,7 @@ namespace Ezpz
             BuildSandbox();
             BuildMods();
             BuildConsole();
+            BuildLogs();
             BuildHome();
             BuildPlayers();
             BuildWorld();
@@ -140,7 +141,7 @@ namespace Ezpz
 
         void BuildNav()
         {
-            string[] names = { "Home", "Setup", "Configure", "Sandbox", "Mods", "Console", "Players & Admin", "World & Weather", "Discord", "Backups", "Reset" };
+            string[] names = { "Home", "Setup", "Configure", "Sandbox", "Mods", "Console", "Logs", "Players & Admin", "World & Weather", "Discord", "Backups", "Reset" };
             int y = 14;
             for (int i = 0; i < names.Length; i++)
             {
@@ -163,7 +164,7 @@ namespace Ezpz
         }
 
         // Page numbers, in nav order.
-        const int PHome = 0, PSetup = 1, PConfig = 2, PSandbox = 3, PMods = 4, PConsole = 5, PPlayers = 6, PWorld = 7, PDiscord = 8, PBackups = 9, PReset = 10;
+        const int PHome = 0, PSetup = 1, PConfig = 2, PSandbox = 3, PMods = 4, PConsole = 5, PLogs = 6, PPlayers = 7, PWorld = 8, PDiscord = 9, PBackups = 10, PReset = 11;
 
         public int StartPage;
         int currentPage = -1;
@@ -171,7 +172,7 @@ namespace Ezpz
         {
             if (i != currentPage && !LeaveCheck()) return;
             currentPage = i;
-            Control[] all = { pgHome, pgSetup, pgConfig, pgSandbox, pgMods, pgConsole, pgPlayers, pgWorld, pgDiscord, pgBackups, pgReset };
+            Control[] all = { pgHome, pgSetup, pgConfig, pgSandbox, pgMods, pgConsole, pgLogs, pgPlayers, pgWorld, pgDiscord, pgBackups, pgReset };
             for (int k = 0; k < all.Length; k++)
             {
                 all[k].Visible = k == i;
@@ -182,6 +183,7 @@ namespace Ezpz
             if (i == PSandbox) RefreshSandbox(false);
             if (i == PMods) RefreshMods(false);
             if (i == PHome) RefreshHome();
+            if (i == PLogs) LoadLogs(false);
             if (i == PPlayers) RefreshPlayers(true);
             if (i == PWorld) RefreshWorld();
             if (i == PDiscord) RefreshDiscord();
@@ -1158,6 +1160,7 @@ namespace Ezpz
             PlayersTick();
             ModWatchTick();
             DiscordTick();
+            if (currentPage == PLogs && ticks % 10 == 0) LoadLogs(false);
             if (currentPage == PHome && ticks % 3 == 0) RefreshHome();
 
             // scheduled restarts with in-game warnings
