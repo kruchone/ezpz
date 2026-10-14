@@ -81,14 +81,28 @@ namespace Ezpz
         void RefreshWorld()
         {
             if (server.State == ServerState.Running && (DateTime.Now - lastPoll).TotalSeconds > 10) RefreshPlayers(false);
+            LookupEbs();
+        }
+
+        bool ebsLooking, ebsLookedUp;
+
+        // Shared with the Home page: read the EBS frequency from the newest server log.
+        void LookupEbs()
+        {
+            if (ebsLooking) return;
+            ebsLooking = true;
             Task.Run(() =>
             {
                 DateTime when;
-                string khz = GameData.FindEbs(S, out when);
+                string khz = null;
+                try { khz = GameData.FindEbs(S, out when); } catch { when = DateTime.MinValue; }
                 Ui(() =>
                 {
                     if (khz != null && (ebsKhz == null || when > ebsWhen)) { ebsKhz = khz; ebsWhen = when; }
+                    ebsLooking = false;
+                    ebsLookedUp = true;
                     UpdateEbsLabel();
+                    if (currentPage == PHome) RefreshGlance();
                 });
             });
         }

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- New Home page, opened first: server status and quick actions, an at-a-glance row (EBS, mods, last backup, next restart, server build), a server update check with one-click update, and the health section. The separate Health page is gone.
+- The window title now reads `<Server ID>: <status> — ezpz <version>`.
+- Memory health groups simultaneous allocation stalls into one pause and treats startup pauses as normal. One or two brief pauses are a warning, not "too small".
 - New Health page: Java memory use over time with a verdict and suggested max, pauses waiting for memory, crash and out-of-memory detection, PC memory and server CPU, and live tiles from PZ's `stats` command (players, server FPS, zombies, network, today's kills and deaths). ezpz now starts the server with a Java memory log for this.
 - New Mods page: paste Workshop links, item numbers or collections. ezpz downloads them with SteamCMD, reads their mod IDs, and writes `WorkshopItems=`, `Mods=` and `Map=` in the Build 42 format, with checks for missing requirements and non-B42 mods.
 - The console collapses the harmless stack traces B42 prints for mods without animation folders into one grey line.

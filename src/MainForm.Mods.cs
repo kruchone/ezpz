@@ -22,7 +22,7 @@ namespace Ezpz
         readonly Dictionary<string, WorkshopItem> wsInfo = new Dictionary<string, WorkshopItem>();
         readonly Dictionary<string, List<ModEntry>> wsMods = new Dictionary<string, List<ModEntry>>();
         ModConfig.RunStatus lastRun = new ModConfig.RunStatus();
-        bool modsDirty, rebuildingMods;
+        bool modsDirty, rebuildingMods, modsLoaded;
 
         void BuildMods()
         {
@@ -112,6 +112,7 @@ namespace Ezpz
         void RefreshMods(bool force)
         {
             if (modsDirty && !force) { RebuildModList(); return; }
+            modsLoaded = true;
             var ini = IniFile.Load(S.IniPath);
             wsOrder.Clear();
             wsOrder.AddRange(ModConfig.Split(ini.Get("WorkshopItems", "")));
@@ -338,6 +339,17 @@ namespace Ezpz
 
         void UpdateModIssues()
         {
+            var lines = ComputeModIssues();
+            if (lines.Count == 0)
+                lines.Add(wsOrder.Count == 0 ? "No mods yet." : "No problems found.");
+            tbModIssues.Text = string.Join("\r\n", lines);
+            ShowModState();
+        }
+
+        // Shared with the Home page. Lines starting with the warning sign are real problems; others are notes.
+        List<string> ComputeModIssues()
+        {
+            if (!modsLoaded) RefreshMods(false);
             var lines = new List<string>();
             var all = AllMods.ToList();
             var known = new HashSet<string>(all.Select(m => m.Id), StringComparer.OrdinalIgnoreCase);
@@ -370,10 +382,11 @@ namespace Ezpz
             }
             foreach (var p in lastRun.Problems) lines.Add("Server said: " + p);
 
-            if (lines.Count == 0)
-                lines.Add(wsOrder.Count == 0 ? "No mods yet." : "No problems found.");
-            tbModIssues.Text = string.Join("\r\n", lines);
+            return lines;
+        }
 
+        void ShowModState()
+        {
             int on = enabledMods.Count;
             lblModsState.Text = wsOrder.Count + " Workshop item(s) · " + on + " mod(s) on" +
                 (modsDirty ? "  ·  unsaved changes" : "") +

@@ -409,7 +409,17 @@ namespace Ezpz
             }
         }
 
-        public static Task<int> RunAsync(string exe, string args, string wd, Action<string> log)
+        // Only one SteamCMD at a time: an update check, a server update and a mod download must not overlap.
+        static readonly SemaphoreSlim gate = new SemaphoreSlim(1, 1);
+
+        public static async Task<int> RunAsync(string exe, string args, string wd, Action<string> log)
+        {
+            await gate.WaitAsync();
+            try { return await RunOnce(exe, args, wd, log); }
+            finally { gate.Release(); }
+        }
+
+        static Task<int> RunOnce(string exe, string args, string wd, Action<string> log)
         {
             var tcs = new TaskCompletionSource<int>();
             var psi = new ProcessStartInfo(exe, args);
@@ -428,6 +438,29 @@ namespace Ezpz
             p.BeginOutputReadLine();
             p.BeginErrorReadLine();
             return tcs.Task;
+        }
+
+        public static string InstalledBuildId(AppSettings s)
+        {
+            if (!File.Exists(s.AppManifest)) return null;
+            var b = Regex.Match(File.ReadAllText(s.AppManifest), "\"buildid\"\\s+\"(\\d+)\"");
+            return b.Success ? b.Groups[1].Value : null;
+        }
+
+        // Asks Steam for the newest build of the server on the configured branch. Null if it couldn't tell.
+        public static async Task<string> LatestBuildId(AppSettings s, Action<string> log)
+        {
+            await EnsureInstalled(s, log);
+            var sb = new StringBuilder();
+            await RunAsync(s.SteamCmdExe, "+login anonymous +app_info_update 1 +app_info_print " + AppId + " +quit", s.SteamCmdDir,
+                l => { lock (sb) sb.AppendLine(l.StartsWith("[steamcmd] ") ? l.Substring(11) : l); });
+            string text;
+            lock (sb) text = sb.ToString();
+            int at = text.IndexOf("\"branches\"", StringComparison.Ordinal);
+            if (at < 0) return null;
+            string branch = string.IsNullOrEmpty(s.Branch) ? "public" : s.Branch;
+            var m = Regex.Match(text.Substring(at), "\"" + Regex.Escape(branch) + "\"\\s*\\{[^}]*?\"buildid\"\\s+\"(\\d+)\"", RegexOptions.Singleline);
+            return m.Success ? m.Groups[1].Value : null;
         }
 
         public static string InstalledBuildInfo(AppSettings s)

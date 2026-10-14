@@ -11,11 +11,19 @@ using System.Windows.Forms;
 
 namespace Ezpz
 {
-    // Health page: Java memory (from the GC log ezpz enables), PC resources, crash signs,
-    // and live numbers from PZ's own "stats <group> all" command.
+    // Home page (opens first, not numbered): status and quick actions, server updates, an at-a-glance row
+    // drawn from other pages, and health: Java memory (from the GC log ezpz enables), live numbers from
+    // PZ's own "stats <group> all" command, PC resources and crash signs.
     public partial class MainForm
     {
-        Page pgHealth;
+        Page pgHome;
+        Label lblHomeStatus, lblHomeSub, lblUpdate;
+        Button btnUpdateNow;
+        TextBox tbHomeBroadcast;
+        FlowLayoutPanel glanceTiles;
+        string latestBuild, updateError;
+        bool checkingUpdate;
+        DateTime lastUpdateCheck = DateTime.MinValue;
         Label lblVerdict, lblVerdictDetail, lblHeapNums, lblPcNums, lblProblems, lblStatsNote;
         HeapChart heapChart;
         FlowLayoutPanel statTiles;
@@ -46,10 +54,48 @@ namespace Ezpz
             new[] { "memory-used", "Java memory now" },
         };
 
-        void BuildHealth()
+        static readonly string[] Glance = { "EBS radio", "Mods on", "Mod problems", "Last backup", "Next restart", "Server build" };
+
+        void BuildHome()
         {
-            var p = pgHealth = NewPage();
-            p.H1("Health");
+            var p = pgHome = NewPage();
+
+            // ---- status
+            lblHomeStatus = new Label { AutoSize = true, Font = new Font("Segoe UI Semibold", 26f), ForeColor = Theme.Muted, Text = "● Stopped" };
+            p.Add(lblHomeStatus, 50);
+            lblHomeSub = Fixed(p, 48, Theme.Text);
+            var save = Theme.Btn("Save world");
+            save.Click += (s, e) => Cmd("save");
+            var backup = Theme.Btn("Back up now");
+            backup.Click += async (s, e) => await BackupFlow("manual");
+            var console = Theme.Btn("Open console");
+            console.Click += (s, e) => ShowPage(PConsole);
+            p.Buttons(save, backup, console);
+            tbHomeBroadcast = p.Row("Message all players", Theme.Box(""), 460);
+            tbHomeBroadcast.KeyDown += (s, e) => { if (e.KeyCode == Keys.Enter) { HomeBroadcast(); e.SuppressKeyPress = true; } };
+            var send = Theme.Btn("Send", Theme.AccentBtn);
+            send.Margin = new Padding(0);
+            send.Location = new Point(Page.X + Page.LabelW + 470, tbHomeBroadcast.Top - 4);
+            send.Click += (s, e) => HomeBroadcast();
+            p.Controls.Add(send);
+
+            // ---- at a glance (facts from the other pages)
+            p.H2("At a glance");
+            glanceTiles = new FlowLayoutPanel { Size = new Size(Page.Wide, 76), WrapContents = true, BackColor = Color.Transparent };
+            foreach (var g in Glance) glanceTiles.Controls.Add(MakeTile(g));
+            p.Add(glanceTiles, 72);
+
+            // ---- server updates
+            p.H2("Server updates");
+            lblUpdate = Fixed(p, 44, Theme.Text);
+            var check = Theme.Btn("Check for updates");
+            check.Click += async (s, e) => await CheckForUpdate(true);
+            btnUpdateNow = Theme.Btn("Update now");
+            btnUpdateNow.Click += async (s, e) => await UpdateServerFlow();
+            p.Buttons(check, btnUpdateNow);
+
+            // ---- health
+            p.H2("Health");
             lblVerdict = new Label { AutoSize = true, Font = new Font("Segoe UI Semibold", 15f), ForeColor = Theme.Text, MaximumSize = new Size(Page.Wide, 0) };
             p.Add(lblVerdict, 32);
             lblVerdictDetail = Fixed(p, 62, Theme.Text);
@@ -78,9 +124,14 @@ namespace Ezpz
             p.End();
         }
 
-        void RefreshHealth()
+        void RefreshHome()
         {
-            if (pgHealth == null) return;
+            if (pgHome == null) return;
+            RefreshHomeStatus();
+            RefreshGlance();
+            UpdateUpdateLabel();
+            if (latestBuild == null && !checkingUpdate && updateError == null && lastUpdateCheck == DateTime.MinValue) { var _ = CheckForUpdate(false); }
+
             var gc = gcReader.Read(S.GcLogPath);
             bool running = server.State == ServerState.Running || server.State == ServerState.Starting;
             var ci = new Microsoft.VisualBasic.Devices.ComputerInfo();
@@ -98,7 +149,9 @@ namespace Ezpz
                 string when = running ? "this run" : "the last run (ended " + FriendlyTime(gc.LastGc) + ")";
                 lblHeapNums.Text = "Now: " + Gb(gc.LastAfterMB) + "   ·   Peak: " + Gb(gc.NeedMB) + "   ·   Max: " + Gb(gc.MaxMB > 0 ? gc.MaxMB : S.MaxRamGB * 1024L)
                     + "   ·   " + gc.Collections + " cleanups (they run alongside the game, not as pauses)"
-                    + "   ·   Waits for memory: " + gc.Stalls + "   (" + when + ")";
+                    + "   ·   Waits for memory: " + gc.Stalls
+                    + (gc.StartupStalls > 0 ? " (plus " + gc.StartupStalls + " brief one" + (gc.StartupStalls == 1 ? "" : "s") + " while loading the world at startup, " + gc.StartupStallMs.ToString("0") + " ms, which is normal)" : "")
+                    + "   (" + when + ")";
             }
             else lblHeapNums.Text = "No memory data yet.";
 
@@ -116,6 +169,146 @@ namespace Ezpz
 
             if (server.State == ServerState.Running) { if ((DateTime.Now - lastStatsPoll).TotalSeconds >= 10) PollLiveStats(); }
             else UpdateTiles(false);
+        }
+
+        // ---------- status
+
+        void RefreshHomeStatus()
+        {
+            var st = server.State;
+            lblHomeStatus.Text = "● " + StateText();
+            lblHomeStatus.ForeColor = st == ServerState.Running ? Theme.Accent : st == ServerState.Stopped ? Theme.Muted : Theme.Warn;
+            var ini = IniFile.Load(S.IniPath);
+            string name = ini.Get("PublicName", "");
+            string port = ini.Get("DefaultPort", "16261");
+            var parts = new List<string>();
+            parts.Add((name != "" ? "\"" + name + "\"" : "Server") + " (ID " + S.ServerName + ")");
+            if (st != ServerState.Stopped)
+            {
+                var up = DateTime.Now - server.StartedAt;
+                parts.Add("up " + (int)up.TotalHours + "h " + up.Minutes.ToString("00") + "m");
+                double players;
+                lock (liveStats) if (liveStats.TryGetValue("players", out players)) parts.Add(players.ToString("0") + " player" + (players == 1 ? "" : "s") + " online");
+            }
+            string sub = string.Join("   ·   ", parts);
+            sub += "\nJoin on this network at " + string.Join(" or ", LocalIps().Select(ip => ip + ":" + port))
+                 + ". From the internet, use your public IP (Setup page) and port " + port + ".";
+            if (st == ServerState.Stopped && !File.Exists(S.StartBat)) sub = "The server isn't installed yet. Start on the Setup page.";
+            lblHomeSub.Text = sub;
+        }
+
+        void HomeBroadcast()
+        {
+            string m = tbHomeBroadcast.Text.Trim();
+            if (m == "") return;
+            Cmd("servermsg \"" + Q(m) + "\"");
+            tbHomeBroadcast.Clear();
+        }
+
+        // ---------- at a glance
+
+        void RefreshGlance()
+        {
+            if (glanceTiles == null) return;
+            if (ebsKhz == null && !ebsLookedUp) LookupEbs();
+            var ini = IniFile.Load(S.IniPath);
+            int modsOn = ModConfig.Split(ini.Get("Mods", "")).Count;
+            int modProblems = ComputeModIssues().Count(l => l.StartsWith("⚠"));
+            string lastBackup = "none";
+            try
+            {
+                if (Directory.Exists(S.BackupDir))
+                {
+                    var f = new DirectoryInfo(S.BackupDir).GetFiles(S.ServerName + "_*.zip").OrderByDescending(x => x.CreationTime).FirstOrDefault();
+                    if (f != null) lastBackup = FriendlyTime(f.CreationTime);
+                }
+            }
+            catch { }
+            string nextRestart = "off";
+            if (S.RestartHours > 0)
+            {
+                if (server.State == ServerState.Running)
+                {
+                    var left = server.StartedAt.AddHours(S.RestartHours) - DateTime.Now;
+                    nextRestart = left.TotalSeconds > 0 ? "in " + (int)left.TotalHours + "h " + left.Minutes.ToString("00") + "m" : "now";
+                }
+                else nextRestart = "every " + S.RestartHours + "h";
+            }
+            string[] values =
+            {
+                ebsKhz != null ? GameData.FormatFreq(ebsKhz) : "—",
+                modsOn.ToString(),
+                modProblems.ToString(),
+                lastBackup,
+                nextRestart,
+                SteamCmd.InstalledBuildId(S) ?? "—",
+            };
+            for (int i = 0; i < values.Length; i++)
+            {
+                var v = (Label)glanceTiles.Controls[i].Controls[0];
+                v.Text = values[i];
+                v.Font = values[i].Length > 9 ? Theme.H2 : new Font("Segoe UI Semibold", 15f);
+                v.ForeColor = i == 2 && modProblems > 0 ? Theme.Warn : Theme.Text;
+            }
+        }
+
+        // ---------- server updates
+
+        async System.Threading.Tasks.Task CheckForUpdate(bool userAsked)
+        {
+            if (checkingUpdate) return;
+            if (!File.Exists(S.StartBat)) { if (userAsked) Warn("The server isn't installed yet. Install it on the Setup page."); return; }
+            checkingUpdate = true;
+            updateError = null;
+            UpdateUpdateLabel();
+            try
+            {
+                latestBuild = await SteamCmd.LatestBuildId(S, l => { });
+                if (latestBuild == null) updateError = "Steam didn't return build information. Try again later.";
+            }
+            catch (Exception ex) { updateError = ex.Message; }
+            finally
+            {
+                checkingUpdate = false;
+                lastUpdateCheck = DateTime.Now;
+                UpdateUpdateLabel();
+                RefreshGlance();
+            }
+        }
+
+        void UpdateUpdateLabel()
+        {
+            if (lblUpdate == null) return;
+            string installed = SteamCmd.InstalledBuildId(S);
+            string branch = string.IsNullOrEmpty(S.Branch) ? "public" : S.Branch;
+            bool behind = installed != null && latestBuild != null && installed != latestBuild;
+            string text;
+            if (installed == null) text = "The server isn't installed yet.";
+            else if (checkingUpdate) text = "Installed: build " + installed + " (" + branch + " branch). Checking Steam for a newer build…";
+            else if (updateError != null) text = "Installed: build " + installed + " (" + branch + " branch). Couldn't check for updates: " + updateError;
+            else if (latestBuild == null) text = "Installed: build " + installed + " (" + branch + " branch).";
+            else if (behind) text = "Update available: build " + latestBuild + " (you have " + installed + "). Players' games must be on the same version as the server, so update soon after Steam updates the game.";
+            else text = "Up to date: build " + installed + " is the newest on the " + branch + " branch (checked " + FriendlyTime(lastUpdateCheck) + ").";
+            lblUpdate.Text = text;
+            lblUpdate.ForeColor = behind ? Theme.Warn : updateError != null ? Theme.Muted : Theme.Text;
+            btnUpdateNow.BackColor = behind ? Theme.AccentBtn : Theme.Card;
+        }
+
+        // Stop (if running), update with SteamCMD, start again if it was running.
+        async System.Threading.Tasks.Task UpdateServerFlow()
+        {
+            bool wasRunning = server.State != ServerState.Stopped;
+            if (wasRunning)
+            {
+                if (!Confirm("Updating needs the server stopped. Stop it (saving the world), update, and start it again?")) return;
+                try { server.SendCommand("servermsg \"Server is restarting for an update.\"", false); } catch { }
+                await StopFlow();
+                if (server.State != ServerState.Stopped) return;
+            }
+            await InstallFlow(false);
+            latestBuild = null;
+            await CheckForUpdate(false);
+            if (wasRunning) await StartFlow();
         }
 
         // These labels change while the page is open, so they get a fixed box instead of growing over what's below.

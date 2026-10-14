@@ -49,7 +49,7 @@ namespace Ezpz
             server.StateChanged += () => Ui(OnStateChanged);
             server.UnexpectedExit += () => Ui(OnCrash);
 
-            Text = "ezpz " + Program.Version + " — Project Zomboid B42 server manager";
+            UpdateTitle();
             Font = Theme.Base;
             BackColor = Theme.Bg;
             ForeColor = Theme.Text;
@@ -70,7 +70,7 @@ namespace Ezpz
             BuildConfig();
             BuildMods();
             BuildConsole();
-            BuildHealth();
+            BuildHome();
             BuildPlayers();
             BuildWorld();
             BuildBackups();
@@ -131,14 +131,14 @@ namespace Ezpz
 
         void BuildNav()
         {
-            string[] names = { "Setup", "Configure", "Mods", "Console", "Health", "Players & Admin", "World & Weather", "Backups", "Reset" };
+            string[] names = { "Home", "Setup", "Configure", "Mods", "Console", "Players & Admin", "World & Weather", "Backups", "Reset" };
             int y = 14;
             for (int i = 0; i < names.Length; i++)
             {
                 int idx = i;
                 var b = new Button
                 {
-                    Text = (i + 1) + "   " + names[i], FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
+                    Text = (i == PHome ? "⌂   " : i + "   ") + names[i], FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
                     Size = new Size(200, 40), Location = new Point(10, y), ForeColor = Theme.Text, Font = Theme.Bold,
                     BackColor = Theme.Side, Cursor = Cursors.Hand, Padding = new Padding(8, 0, 0, 0)
                 };
@@ -146,7 +146,7 @@ namespace Ezpz
                 b.Click += (s, e) => ShowPage(idx);
                 nav.Controls.Add(b);
                 navButtons.Add(b);
-                y += 44;
+                y += i == PHome ? 54 : 44;
             }
             navButtons[PReset].ForeColor = Theme.Danger;
             var ver = new Label { Text = "Data:\n" + S.DataDir, ForeColor = Theme.Muted, AutoSize = true, MaximumSize = new Size(200, 0), Location = new Point(14, y + 20) };
@@ -154,14 +154,14 @@ namespace Ezpz
         }
 
         // Page numbers, in nav order.
-        const int PSetup = 0, PConfig = 1, PMods = 2, PConsole = 3, PHealth = 4, PPlayers = 5, PWorld = 6, PBackups = 7, PReset = 8;
+        const int PHome = 0, PSetup = 1, PConfig = 2, PMods = 3, PConsole = 4, PPlayers = 5, PWorld = 6, PBackups = 7, PReset = 8;
 
         public int StartPage;
         int currentPage = -1;
         void ShowPage(int i)
         {
             currentPage = i;
-            Control[] all = { pgSetup, pgConfig, pgMods, pgConsole, pgHealth, pgPlayers, pgWorld, pgBackups, pgReset };
+            Control[] all = { pgHome, pgSetup, pgConfig, pgMods, pgConsole, pgPlayers, pgWorld, pgBackups, pgReset };
             for (int k = 0; k < all.Length; k++)
             {
                 all[k].Visible = k == i;
@@ -170,7 +170,7 @@ namespace Ezpz
             if (i == PSetup) RefreshChecklist();
             if (i == PConfig) LoadConfig();
             if (i == PMods) RefreshMods(false);
-            if (i == PHealth) RefreshHealth();
+            if (i == PHome) RefreshHome();
             if (i == PPlayers) RefreshPlayers(true);
             if (i == PWorld) RefreshWorld();
             if (i == PBackups) RefreshBackupList();
@@ -318,6 +318,7 @@ namespace Ezpz
         void RefreshAll()
         {
             lblHeaderName.Text = "Server ID: " + S.ServerName + "    ·    " + S.DataDir;
+            UpdateTitle();
             RefreshChecklist();
             OnStateChanged();
         }
@@ -1071,7 +1072,7 @@ namespace Ezpz
             }
             UpdateStats();
             PlayersTick();
-            if (currentPage == PHealth && ticks % 3 == 0) RefreshHealth();
+            if (currentPage == PHome && ticks % 3 == 0) RefreshHome();
 
             // scheduled restarts with in-game warnings
             if (server.State == ServerState.Running && S.RestartHours > 0 && busy == null)
@@ -1104,10 +1105,24 @@ namespace Ezpz
             lblStats.Text = t;
         }
 
+        string StateText()
+        {
+            var st = server.State;
+            return st == ServerState.Stopped ? "Stopped" : st == ServerState.Starting ? "Starting…" : st == ServerState.Running ? "Running" : "Stopping…";
+        }
+
+        // Window title: "<Server ID>: <status> — ezpz <version>"
+        void UpdateTitle()
+        {
+            Text = S.ServerName + ": " + StateText() + " — ezpz " + Program.Version;
+        }
+
         void OnStateChanged()
         {
             var st = server.State;
-            lblStatus.Text = "● " + (st == ServerState.Stopped ? "Stopped" : st == ServerState.Starting ? "Starting…" : st == ServerState.Running ? "Running" : "Stopping…");
+            lblStatus.Text = "● " + StateText();
+            UpdateTitle();
+            if (currentPage == PHome) RefreshHome();
             lblStatus.ForeColor = st == ServerState.Running ? Theme.Accent : st == ServerState.Stopped ? Theme.Muted : Theme.Warn;
             btnStart.Enabled = st == ServerState.Stopped;
             btnStart.BackColor = btnStart.Enabled ? Theme.AccentBtn : Theme.Card;
