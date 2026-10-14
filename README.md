@@ -34,6 +34,25 @@ ezpz is a single `.exe` with no installer and no dependencies. It walks you thro
 | ![Setup](docs/screenshots/setup.png) | ![World & Weather](docs/screenshots/world.png) |
 | ![Console](docs/screenshots/console.png) | ![Reset](docs/screenshots/reset.png) |
 
+## Requirements
+
+**You need:**
+
+- **Windows 10 or 11 (64-bit).** ezpz runs on .NET Framework 4.8, which is built into Windows, so there's nothing to install.
+- **Memory:** about 4 GB for Windows plus whatever you give the server. 8 GB for the server suits a few friends, and big or heavily modded worlds want 10 GB or more. A PC with 16 GB of RAM is a comfortable minimum. The Home page tells you whether the server's memory is sized right.
+- **Disk space:** about 7 GB for the server install, plus room for the world (it grows as players explore), mods and backups. Plan for 15 GB or more free.
+- **An internet connection** to download the server and mods, and for players to connect.
+- **For players outside your home network:** access to your router to forward UDP ports 16261–16262 to the server PC.
+
+**You don't need:**
+
+- **SteamCMD.** ezpz downloads Valve's SteamCMD for you the first time you click **Install / Update server**.
+- **Project Zomboid, or Steam itself, on the server PC.** The dedicated server is a separate free download (Steam app 380870), and ezpz installs it through SteamCMD with an anonymous login, so no Steam account or game ownership is involved. You can still run the server on the same PC you play on.
+- **Administrator rights**, except for the one-time Windows Firewall step, which shows the normal Windows prompt.
+
+**Already have them?** If you already have SteamCMD or a Project Zomboid dedicated server installed, point the folders on the **Setup** page at them and ezpz uses them as they are.
+
+**Players** need Project Zomboid on Steam, on the same version as the server. With Build 42 on the default `public` branch, that just means keeping the game updated.
 ## Getting started
 
 1. Download `ezpz.exe` from the [latest release](../../releases/latest) and put it anywhere.
@@ -44,7 +63,6 @@ ezpz is a single `.exe` with no installer and no dependencies. It walks you thro
 
 For players outside your home network, forward **UDP 16261-16262** on your router to the PC running the server. Friends join with your public IP and port 16261.
 
-Requirements: Windows 10 or 11 (64-bit), which already includes .NET Framework 4.8, plus enough RAM for the server. 8 GB for the server is a good start for a few friends.
 
 ## Resetting
 
