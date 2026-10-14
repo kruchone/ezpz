@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Backups: choose ezpz, Project Zomboid's built-in backups, or both, and set each side's options in one place (PZ's are written to the server config). ezpz can also back up every N hours while the server runs. Both kinds appear in one list with what each contains and the world version, and either kind can be restored. A restore now only replaces what the backup contains, so a config-only backup leaves the world alone. The Console page's back-up-on-start option moved to the Backups page.
 - New Logs page: a searchable, filterable timeline of chat, admin actions, console commands, PvP, player actions, joins and skill level-ups from PZ's logs (current and archived runs), with View logs from the Players page. ezpz's own background checks and PZ's internal log noise are left out, and passwords in setpassword commands are hidden.
 - Splash screen at startup. ezpz preloads every page behind it (players, character sheets, mods, the Sandbox editor, server config, Discord, radio, memory history, backups, firewall), so pages open instantly. The Sandbox page went from a 2.5 s freeze on first open to about 50 ms. Anything that fails to load is listed in plain words, with Continue, Copy details and Quit, and saved to `startup.log`. The server is never started by this.
 - Character sheets on the Players page: days survived, deaths, last position, skills by group with levels, and recent level-ups (from PZ's PerkLog), plus per-player network traffic from the metrics server while they're online.

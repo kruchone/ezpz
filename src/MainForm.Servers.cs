@@ -122,6 +122,8 @@ namespace Ezpz
             chkBackupOnStart.Checked = S.BackupOnStart;
             numKeepBackups.Value = Math.Max(numKeepBackups.Minimum, Math.Min(numKeepBackups.Maximum, S.KeepAutoBackups));
             cbModAction.SelectedIndex = Math.Max(0, Math.Min(2, S.ModUpdateAction));
+            LoadBackupSettings();
+            lastBackupAt = DateTime.MinValue;
             LoadDiscordControls();
         }
 

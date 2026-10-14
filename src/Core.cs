@@ -28,6 +28,8 @@ namespace Ezpz
         public bool UpdateOnRestart = false;
         public bool BackupOnStart = true;
         public int KeepAutoBackups = 10;
+        public int BackupMode = -1;          // 0 = ezpz, 1 = PZ's built-in, 2 = both; -1 = not chosen yet
+        public int BackupEveryHours = 0;     // ezpz backups while the server runs (0 = only on start)
         public int ModUpdateAction = 1;    // 0 = just tell me, 1 = restart after a 5-minute warning, 2 = restart when nobody is online
         public int ModCheckMinutes = 10;
         public string DiscordWebhookProtected = "";   // encrypted like the admin password

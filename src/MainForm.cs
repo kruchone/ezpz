@@ -748,10 +748,7 @@ namespace Ezpz
             var lbl2 = new Label { Text = "hours (0 = off)", AutoSize = true, Margin = new Padding(4, 4, 16, 0) };
             var upd = chkUpdateOnRestart = Theme.Check("Update game on scheduled restart", S.UpdateOnRestart);
             upd.CheckedChanged += (s, e) => { S.UpdateOnRestart = upd.Checked; S.Save(); };
-            var bos = chkBackupOnStart = Theme.Check("Back up on start", S.BackupOnStart);
-            bos.Margin = new Padding(16, 3, 0, 0);
-            bos.CheckedChanged += (s, e) => { S.BackupOnStart = bos.Checked; S.Save(); };
-            opts.Controls.AddRange(new Control[] { auto, lbl, hrs, lbl2, upd, bos });
+            opts.Controls.AddRange(new Control[] { auto, lbl, hrs, lbl2, upd });
             p.Controls.Add(opts);
             p.Controls.Add(input);
             rtb.BringToFront();
@@ -804,105 +801,6 @@ namespace Ezpz
             if (s.IndexOf("ERROR", StringComparison.Ordinal) >= 0 || s.IndexOf("Exception", StringComparison.Ordinal) >= 0) return Theme.Danger;
             if (s.StartsWith("WARN")) return Theme.Warn;
             return Color.FromArgb(190, 194, 200);
-        }
-
-        // ================================================================== BACKUPS
-
-        ListView lvBackups;
-
-        void BuildBackups()
-        {
-            var p = pgBackups = NewPage();
-            p.H1("Backups");
-            p.P("A backup is one .zip with this server's world, its player and account database, and its config files. The manager also backs up automatically before every reset and restore, and on each start if that option is on (Console page).");
-            var now = Theme.Btn("Back up now", Theme.AccentBtn);
-            now.Click += async (s, e) => await BackupFlow("manual");
-            var restore = Theme.Btn("Restore selected…");
-            restore.Click += async (s, e) => await RestoreFlow();
-            var del = Theme.Btn("Delete selected", Theme.DangerBtn);
-            del.Click += (s, e) => DeleteBackups();
-            var open = Theme.Btn("Open backups folder");
-            open.Click += (s, e) => OpenFolder(S.BackupDir);
-            var refresh = Theme.Btn("Refresh");
-            refresh.Click += (s, e) => RefreshBackupList();
-            p.Buttons(now, restore, del, open, refresh);
-            var keep = numKeepBackups = p.Row("Keep this many auto-backups", Theme.Num(1, 500, S.KeepAutoBackups), 80);
-            keep.ValueChanged += (s, e) => { S.KeepAutoBackups = (int)keep.Value; S.Save(); };
-            p.Hint("Older automatic start-up backups are deleted. Manual, pre-reset and pre-restore backups are never deleted automatically.");
-
-            lvBackups = new ListView
-            {
-                View = View.Details, FullRowSelect = true, Size = new Size(Page.Wide, 420), BackColor = Theme.Input,
-                ForeColor = Theme.Text, BorderStyle = BorderStyle.FixedSingle, HideSelection = false
-            };
-            lvBackups.Columns.Add("Backup", 470);
-            lvBackups.Columns.Add("Created", 180);
-            lvBackups.Columns.Add("Size", 100);
-            lvBackups.Columns.Add("Type", 120);
-            p.Add(lvBackups, 420);
-            p.End();
-        }
-
-        void RefreshBackupList()
-        {
-            lvBackups.Items.Clear();
-            if (!Directory.Exists(S.BackupDir)) return;
-            foreach (var f in new DirectoryInfo(S.BackupDir).GetFiles("*.zip").OrderByDescending(x => x.CreationTime))
-            {
-                var m = Regex.Match(f.Name, @"_([a-z\-]+)\.zip$");
-                var it = new ListViewItem(new[] { f.Name, f.CreationTime.ToString("yyyy-MM-dd HH:mm:ss"), Util.Size(f.Length), m.Success ? m.Groups[1].Value : "" });
-                it.Tag = f.FullName;
-                if (!f.Name.StartsWith(S.ServerName + "_")) it.ForeColor = Theme.Muted;
-                lvBackups.Items.Add(it);
-            }
-        }
-
-        async Task<bool> BackupFlow(string reason)
-        {
-            if (!BeginBusy("Backing up…")) return false;
-            try
-            {
-                if (server.State == ServerState.Running)
-                {
-                    Log("[backup] Server is running. Saving the world first...");
-                    try { server.SendCommand("save"); } catch { }
-                    await Task.Delay(8000);
-                }
-                await Task.Run(() => Backups.Create(S, reason, Log));
-                if (reason == "auto") Backups.PruneAuto(S, Log);
-                return true;
-            }
-            catch (Exception ex) { Log("[backup] ERROR: " + ex.Message); Warn("Backup failed: " + ex.Message); return false; }
-            finally { EndBusy(); RefreshBackupList(); }
-        }
-
-        async Task RestoreFlow()
-        {
-            if (lvBackups.SelectedItems.Count != 1) { Warn("Select one backup to restore."); return; }
-            string zip = (string)lvBackups.SelectedItems[0].Tag;
-            if (!Confirm("Restore " + Path.GetFileName(zip) + "?\n\nThis replaces the current world, accounts and config of '" + S.ServerName + "'. A 'pre-restore' backup of the current state is made first.")) return;
-            if (!await EnsureStopped("restore")) return;
-            if (!await BackupFlow("pre-restore")) return;
-            if (!BeginBusy("Restoring…")) return;
-            try { await Task.Run(() => Backups.Restore(S, zip, Log)); Info("Restore complete."); }
-            catch (Exception ex) { Log("[backup] ERROR: " + ex.Message); Warn(ex.Message); }
-            finally { EndBusy(); RefreshBackupList(); }
-        }
-
-        void DeleteBackups()
-        {
-            if (lvBackups.SelectedItems.Count == 0) return;
-            if (!Confirm("Move " + lvBackups.SelectedItems.Count + " backup(s) to the Recycle Bin?")) return;
-            foreach (ListViewItem it in lvBackups.SelectedItems)
-            {
-                try
-                {
-                    Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile((string)it.Tag,
-                        Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
-                }
-                catch (Exception ex) { Log("[backup] " + ex.Message); }
-            }
-            RefreshBackupList();
         }
 
         // ================================================================== RESET
@@ -1160,6 +1058,7 @@ namespace Ezpz
             PlayersTick();
             ModWatchTick();
             DiscordTick();
+            BackupTick();
             if (currentPage == PLogs && ticks % 10 == 0) LoadLogs(false);
             if (currentPage == PHome && ticks % 3 == 0) RefreshHome();
 
