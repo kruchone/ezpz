@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/players.png" width="820" alt="ezpz Players & Admin page">
+  <img src="docs/screenshots/home.png" width="820" alt="ezpz Home page">
 </p>
 
 ezpz is a single `.exe` with no installer and no dependencies. It walks you through installing the dedicated server with SteamCMD, configuring it and opening the firewall, then gives you a console, player management, weather controls, backups and a safe **reset** button.
@@ -32,8 +32,12 @@ ezpz is a single `.exe` with no installer and no dependencies. It walks you thro
 
 | | |
 |---|---|
-| ![Setup](docs/screenshots/setup.png) | ![World & Weather](docs/screenshots/world.png) |
-| ![Console](docs/screenshots/console.png) | ![Reset](docs/screenshots/reset.png) |
+| ![Players & Admin, with a character sheet](docs/screenshots/players.png) | ![Logs](docs/screenshots/logs.png) |
+| ![Mods](docs/screenshots/mods.png) | ![Sandbox](docs/screenshots/sandbox.png) |
+| ![Backups](docs/screenshots/backups.png) | ![Console](docs/screenshots/console.png) |
+| ![World & Weather](docs/screenshots/world.png) | ![Discord](docs/screenshots/discord.png) |
+| ![Setup](docs/screenshots/setup.png) | ![Reset](docs/screenshots/reset.png) |
+| ![Splash screen](docs/screenshots/splash.png) | |
 
 ## Requirements
 
