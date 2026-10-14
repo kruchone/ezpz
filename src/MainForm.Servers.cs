@@ -96,6 +96,7 @@ namespace Ezpz
             serverCpuPct = -1; lastCpuAt = DateTime.MinValue;
             sandbox = null;
             dcLoaded = false;
+            feed.Reset();
             playersBaseline = false; notifiedBuild = null; healthNotifiedRun = DateTime.MinValue; lastNotifiedState = ServerState.Stopped;
             modsOutdated = new List<string>(); modsMissing = new List<string>();
             lastModCheck = DateTime.MinValue; modRestartAt = null; modRestartWhenEmpty = false; modCheckError = null;
@@ -169,9 +170,11 @@ namespace Ezpz
                     {
                         string cl = Convert.ToString(mo["CommandLine"]);
                         if (cl.IndexOf("zombie.network.GameServer", StringComparison.Ordinal) < 0) continue;
-                        if (Convert.ToInt32(mo["ProcessId"]) == server.Pid) continue;
+                        int pid = Convert.ToInt32(mo["ProcessId"]);
+                        if (pid == server.Pid) continue;
+                        try { if (System.Diagnostics.Process.GetProcessById(pid).HasExited) continue; } catch { continue; }   // already gone
                         var m = Regex.Match(cl, @"-servername\s+""?([^""\s]+)");
-                        found.Add(m.Success ? m.Groups[1].Value : "unknown (PID " + mo["ProcessId"] + ")");
+                        found.Add(m.Success ? m.Groups[1].Value : "unknown (PID " + pid + ")");
                     }
             }
             catch { }

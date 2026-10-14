@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Far less noise in the server's logs: Home's live tiles now read Project Zomboid's built-in metrics server, every 5 seconds and with nothing logged, instead of sending `stats` commands every 10 seconds. Who is online, including Discord join and leave alerts, comes from the server's connection log instead of polling `players`.
+- The firewall step also blocks inbound TCP to the server's Java from other machines, keeping the metrics and RCON ports private. Players only use UDP.
+- Home flags deadlocked server threads, a sign the server has frozen.
+- Fixed: a quick restart could refuse to start, because the previous server process was still closing. ezpz now waits for it.
 - Fixed: leaving the Discord or Configure page silently dropped unsaved edits. ezpz now asks to save, discard or stay, also when switching servers or closing. The Discord page has a single Save for the whole page.
 - New Discord page: guided setup of the game's built-in chat bridge bot, with a setup check (token, server, channel names, Message Content Intent), plus ezpz notifications through a webhook (online, stopped, crashes, restart warnings, updates, players joining and leaving, memory problems).
 - New Sandbox page: a form for every world rule, built from the server's own SandboxVars file, with search, a changed-from-default filter and reset-to-default. It edits values in place, keeps a .bak copy, and falls back to Notepad if the file looks unfamiliar.

@@ -76,8 +76,9 @@ namespace Ezpz
             // --- toolbar + title
             var top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 46, WrapContents = false };
             var refresh = Theme.Btn("Refresh", Theme.AccentBtn);
-            refresh.Click += (s, e) => RefreshPlayers(true);
+            refresh.Click += (s, e) => { PollOnline(); RefreshPlayers(true); };
             chkAutoPlayers = Theme.Check("Auto-refresh", true);
+            chkAutoPlayers.Visible = false;   // the list now updates live from the server's connection log
             chkAutoPlayers.Margin = new Padding(8, 8, 8, 0);
             chkShowOffline = Theme.Check("Show offline players", true);
             chkShowOffline.Margin = new Padding(8, 8, 8, 0);
@@ -217,8 +218,8 @@ namespace Ezpz
 
         void RefreshPlayers(bool readLogs)
         {
-            if (server.State == ServerState.Running) PollOnline();
-            else { onlineNow.Clear(); RebuildPlayerList(); }
+            if (server.State != ServerState.Running) { onlineNow.Clear(); RebuildPlayerList(); }
+            else RebuildPlayerList();
             if (readLogs || (DateTime.Now - lastLogRead).TotalSeconds > 60)
             {
                 lastLogRead = DateTime.Now;
@@ -243,20 +244,38 @@ namespace Ezpz
                 pollPending = false;
                 var before = onlineNow;
                 lock (captured) onlineNow = new HashSet<string>(captured, StringComparer.OrdinalIgnoreCase);
+                // the server's own answer wins: correct the log feed if it drifted (e.g. a missed timeout)
+                feed.Online.Clear();
+                feed.Online.UnionWith(onlineNow);
                 DiscordPlayersChanged(before, onlineNow);
                 RebuildPlayerList();
             }));
         }
 
+        // Who is online comes from the server's connection log (no console commands, so nothing in PZ's
+        // logs). A quiet "players" check every 5 minutes corrects anything the log missed.
+        readonly ConnectionFeed feed = new ConnectionFeed();
+
         void PlayersTick()
         {
-            if (currentPage != PPlayers && currentPage != PWorld) return;
             if (server.State != ServerState.Running)
             {
-                if (onlineNow.Count > 0) { onlineNow.Clear(); RebuildPlayerList(); }
+                if (onlineNow.Count > 0 || ticks % 10 == 0) { feed.Reset(); if (onlineNow.Count > 0) { onlineNow.Clear(); if (currentPage == PPlayers || currentPage == PWorld) RebuildPlayerList(); } }
                 return;
             }
-            if (chkAutoPlayers.Checked && (DateTime.Now - lastPoll).TotalSeconds >= 15) RefreshPlayers(false);
+            if (ticks % 2 == 0)
+            {
+                bool rebuilt;
+                if (feed.Poll(S, out rebuilt))
+                {
+                    var before = onlineNow;
+                    onlineNow = new HashSet<string>(feed.Online, StringComparer.OrdinalIgnoreCase);
+                    DiscordPlayersChanged(before, onlineNow);
+                    if (currentPage == PPlayers || currentPage == PWorld || currentPage == PHome) RebuildPlayerList();
+                }
+            }
+            if ((DateTime.Now - lastPoll).TotalMinutes >= 5 && (DateTime.Now - server.StartedAt).TotalMinutes >= 2) PollOnline();
+            if ((currentPage == PPlayers) && (DateTime.Now - lastLogRead).TotalSeconds > 60) RefreshPlayers(true);
         }
 
         // All server output comes through here: hide the manager's own polling, pick up facts, then log.

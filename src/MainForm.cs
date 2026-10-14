@@ -17,6 +17,8 @@ namespace Ezpz
     {
         const string FirewallRule = "ezpz - Project Zomboid";
         const string LegacyFirewallRule = "PZ Server Manager - Project Zomboid";
+        // One per install, since it targets that install's java.exe.
+        string PrivateTcpRule { get { return "ezpz - Project Zomboid (keep TCP private) " + S.InstallDir.TrimEnd('\\'); } }
 
         AppSettings S;                // the server being managed; swapped by SwitchServer
         ServerController server;
@@ -116,6 +118,7 @@ namespace Ezpz
             btnServerSwitch.FlatAppearance.BorderSize = 0;
             btnServerSwitch.FlatAppearance.MouseOverBackColor = Theme.Card;
             btnServerSwitch.Click += (s, e) => ShowServerMenu();
+            new ToolTip().SetToolTip(btnServerSwitch, "Switch servers, or add one");
             var title = btnServerSwitch;
             lblHeaderName = new Label { ForeColor = Theme.Muted, AutoSize = true, Location = new Point(18, 38) };
             lblStatus = new Label { Font = Theme.H2, AutoSize = true, Location = new Point(430, 10) };
@@ -206,7 +209,7 @@ namespace Ezpz
             "Choose folders, a server name and an admin password, then Save",
             "Install the server files with SteamCMD",
             "Generate the default config (first start of the server)",
-            "Allow the game ports through Windows Firewall",
+            "Set up Windows Firewall (open the game ports, keep the server's TCP ports private)",
             "Customize your server on the Configure page (optional)",
             "Forward the UDP ports on your router (only for players outside your home network)",
             "Start the server",
@@ -272,7 +275,7 @@ namespace Ezpz
             p.H2("First start & network");
             var gen = Theme.Btn("Generate default config");
             gen.Click += async (s, e) => await GenerateConfigFlow();
-            var fw = Theme.Btn("Add Windows Firewall rule");
+            var fw = Theme.Btn("Set up Windows Firewall");
             fw.Click += async (s, e) => await FirewallFlow();
             var ip = Theme.Btn("Show my public IP");
             ip.Click += async (s, e) => await ShowPublicIp();
@@ -327,7 +330,7 @@ namespace Ezpz
         void RefreshAll()
         {
             btnServerSwitch.Text = S.ServerName + "  ▾";
-            lblHeaderName.Text = S.DataDir + "    ·    click the name to switch or add servers";
+            lblHeaderName.Text = S.DataDir;
             lblNavData.Text = "Data:\n" + S.DataDir;
             UpdateTitle();
             RefreshChecklist();
@@ -359,8 +362,9 @@ namespace Ezpz
             lblNextStep.Text = next < 0 ? "All set. Your server is running." : "Next:  " + Steps[next];
             Task.Run(() =>
             {
-                bool ok = RunHidden("netsh", "advfirewall firewall show rule name=\"" + FirewallRule + "\"") == 0
-                       || RunHidden("netsh", "advfirewall firewall show rule name=\"" + LegacyFirewallRule + "\"") == 0;
+                bool ok = (RunHidden("netsh", "advfirewall firewall show rule name=\"" + FirewallRule + "\"") == 0
+                        || RunHidden("netsh", "advfirewall firewall show rule name=\"" + LegacyFirewallRule + "\"") == 0)
+                       && RunHidden("netsh", "advfirewall firewall show rule name=\"" + PrivateTcpRule + "\"") == 0;
                 if (ok != firewallOk) { firewallOk = ok; Ui(RefreshChecklist); }
             });
             lblIps.Text = "This PC's local IP: " + string.Join(", ", LocalIps());
@@ -416,10 +420,19 @@ namespace Ezpz
             if (!int.TryParse(ini.Get("DefaultPort", "16261"), out p1)) p1 = 16261;
             if (!int.TryParse(ini.Get("UDPPort", "16262"), out p2)) p2 = 16262;
             string ports = p2 == p1 + 1 ? p1 + "-" + p2 : p1 + "," + p2;
+            string java = Path.Combine(S.InstallDir, "jre64", "bin", "java.exe");
+            // Two rules: allow the game's UDP ports, and block inbound TCP to this install's Java from other machines.
+            // PZ only needs UDP; its TCP listeners (the metrics server ezpz reads, and RCON) are for this PC only.
+            // Block rules win over the allow rule Windows created for java.exe on first launch. Local connections aren't filtered.
             string cmd = "/c netsh advfirewall firewall delete rule name=\"" + FirewallRule + "\" >nul 2>&1 & " +
                          "netsh advfirewall firewall delete rule name=\"" + LegacyFirewallRule + "\" >nul 2>&1 & " +
-                         "netsh advfirewall firewall add rule name=\"" + FirewallRule + "\" dir=in action=allow protocol=UDP localport=" + ports;
-            if (MessageBox.Show(this, "This adds an inbound Windows Firewall rule allowing UDP " + ports + ".\nWindows will ask for administrator permission.", "Firewall", MessageBoxButtons.OKCancel) != DialogResult.OK) return;
+                         "netsh advfirewall firewall add rule name=\"" + FirewallRule + "\" dir=in action=allow protocol=UDP localport=" + ports + " & " +
+                         "netsh advfirewall firewall delete rule name=\"" + PrivateTcpRule + "\" >nul 2>&1 & " +
+                         "netsh advfirewall firewall add rule name=\"" + PrivateTcpRule + "\" dir=in action=block protocol=TCP program=\"" + java + "\"";
+            if (MessageBox.Show(this, "This sets up two Windows Firewall rules:\n\n"
+                + "• Allow UDP " + ports + " in, so players can connect.\n"
+                + "• Block TCP from other machines to the server's Java. Players don't use TCP; it keeps the server's stats and remote-command ports private to this PC.\n\n"
+                + "Windows will ask for administrator permission.", "Firewall", MessageBoxButtons.OKCancel) != DialogResult.OK) return;
             try
             {
                 var psi = new ProcessStartInfo("cmd.exe", cmd) { Verb = "runas", UseShellExecute = true, WindowStyle = ProcessWindowStyle.Hidden };
@@ -1055,6 +1068,14 @@ namespace Ezpz
             if (S.AdminPassword == "") { Warn("Set an admin password on the Setup page first."); ShowPage(PSetup); return; }
             if (busy != null) { Warn("Please wait: " + busy); return; }
             var others = await Task.Run(() => OtherRunningServers());
+            // Right after a stop (e.g. a restart) the old process can take a few seconds to finish closing.
+            // If what we found is this same server, wait for it rather than refusing to start.
+            for (int wait = 0; wait < 20 && others.Count > 0 && others.All(o => o.Equals(S.ServerName, StringComparison.OrdinalIgnoreCase)); wait++)
+            {
+                if (wait == 0) Log("[ezpz] Waiting for the previous server process to finish closing…");
+                await Task.Delay(1000);
+                others = await Task.Run(() => OtherRunningServers());
+            }
             if (others.Count > 0)
             {
                 Warn("Another Project Zomboid server is already running on this PC (" + string.Join(", ", others) + ").\n\n"

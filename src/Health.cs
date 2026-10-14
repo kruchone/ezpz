@@ -148,7 +148,9 @@ namespace Ezpz
 
     public static class HealthCheck
     {
-        public static List<string> FindProblems(AppSettings s, GcStats gc, int crashesThisSession)
+        public static List<string> FindProblems(AppSettings s, GcStats gc, int crashesThisSession) { return FindProblems(s, gc, crashesThisSession, 0); }
+
+        public static List<string> FindProblems(AppSettings s, GcStats gc, int crashesThisSession, int deadlockedThreads)
         {
             var p = new List<string>();
             try
@@ -166,6 +168,7 @@ namespace Ezpz
             catch { }
             if (gc.OutOfMemory) p.Add("Java reported running out of memory in the memory log.");
             if (gc.Stalls > 0) p.Add("While running, the game paused " + gc.Stalls + " time(s) waiting for memory (" + gc.StallMsTotal.ToString("0") + " ms in total). Players feel this as lag.");
+            if (deadlockedThreads > 0) p.Add("Java reports " + deadlockedThreads + " deadlocked server threads. The server is probably frozen; restart it.");
             if (crashesThisSession > 0) p.Add("The server stopped unexpectedly " + crashesThisSession + " time(s) since ezpz was opened.");
             return p;
         }

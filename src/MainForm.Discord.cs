@@ -323,7 +323,6 @@ namespace Ezpz
         void DiscordTick()
         {
             if (S.DiscordWebhook == "" || server.State != ServerState.Running) return;
-            if (DiscordWants(DiscordEvent.Players) && ticks % 30 == 0 && currentPage != PPlayers && currentPage != PWorld) PollOnline();
             if (DiscordWants(DiscordEvent.Health) && ticks % 60 == 0)
             {
                 var gc = gcReader.Read(S.GcLogPath);

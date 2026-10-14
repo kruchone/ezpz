@@ -18,6 +18,80 @@ namespace Ezpz
         public DateTime LastSeen = DateTime.MinValue;
     }
 
+    // Follows the current run's *_connections.txt to know who is online without sending console commands.
+    // Join: event="fully-connected". Leave: event="disconnect", or a RakNet disconnection/connection-lost line
+    // that only carries the session guid (mapped back to the name from the join).
+    public class ConnectionFeed
+    {
+        string file;
+        long pos;
+        string partial = "";
+        readonly Dictionary<string, string> guidToName = new Dictionary<string, string>();
+        public readonly HashSet<string> Online = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        static readonly Regex Attr = new Regex("([\\w-]+)=\"([^\"]*)\"");
+
+        // Returns true if the online set changed since the last call. The first read of a file
+        // (ezpz opened mid-run, or a new server run) rebuilds the set from the whole file.
+        public bool Poll(AppSettings s, out bool rebuilt)
+        {
+            rebuilt = false;
+            string newest = null;
+            try
+            {
+                if (Directory.Exists(s.LogsDir))
+                    newest = Directory.GetFiles(s.LogsDir, "*_connections.txt").OrderByDescending(f => File.GetLastWriteTime(f)).FirstOrDefault();
+            }
+            catch { }
+            if (newest == null) return false;
+            if (newest != file) { file = newest; pos = 0; partial = ""; guidToName.Clear(); Online.Clear(); rebuilt = true; }
+            string text;
+            try
+            {
+                using (var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                {
+                    if (fs.Length < pos) { pos = 0; partial = ""; Online.Clear(); guidToName.Clear(); rebuilt = true; }
+                    if (fs.Length == pos) return rebuilt;
+                    fs.Seek(pos, SeekOrigin.Begin);
+                    text = partial + new StreamReader(fs, Encoding.UTF8).ReadToEnd();
+                    pos = fs.Length;
+                }
+            }
+            catch { return false; }
+            int lastNl = text.LastIndexOf('\n');
+            partial = lastNl < text.Length - 1 ? text.Substring(lastNl + 1) : "";
+            bool changed = rebuilt;
+            foreach (var line in text.Substring(0, lastNl + 1).Split('\n'))
+            {
+                string ev = null, msg = "", guid = null, user = null;
+                foreach (Match a in Attr.Matches(line))
+                {
+                    switch (a.Groups[1].Value)
+                    {
+                        case "event": ev = a.Groups[2].Value; break;
+                        case "message": msg = a.Groups[2].Value; break;
+                        case "guid": guid = a.Groups[2].Value; break;
+                        case "username": user = a.Groups[2].Value; break;
+                    }
+                }
+                if (ev == null) continue;
+                if (ev == "fully-connected" && !string.IsNullOrEmpty(user) && user != "null")
+                {
+                    if (guid != null) guidToName[guid] = user;
+                    changed |= Online.Add(user);
+                }
+                else if (ev == "disconnect" || msg.Contains("disconnection") || msg.Contains("connection-lost") || msg.Contains("lost-connection"))
+                {
+                    string name = !string.IsNullOrEmpty(user) && user != "null" ? user : null;
+                    if (name == null && guid != null) guidToName.TryGetValue(guid, out name);
+                    if (name != null) changed |= Online.Remove(name);
+                }
+            }
+            return changed;
+        }
+
+        public void Reset() { file = null; pos = 0; partial = ""; guidToName.Clear(); Online.Clear(); }
+    }
+
     // Reads facts the server writes to disk: player history from the connection logs,
     // and the Emergency Broadcast frequency from the startup log.
     public static class GameData

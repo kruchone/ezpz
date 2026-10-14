@@ -31,6 +31,8 @@ namespace Ezpz
 
         public ServerState State { get; private set; }
         public DateTime StartedAt { get; private set; }
+        // Local port of PZ's built-in Prometheus metrics server (0 = none). Picked fresh at each launch.
+        public int MetricsPort { get; private set; }
         public bool StopWhenStarted;
 
         public ServerController(AppSettings s) { S = s; State = ServerState.Stopped; }
@@ -56,6 +58,17 @@ namespace Ezpz
         }
 
         // Turn StartServer64.bat into a direct java.exe command line so we own the real process.
+        int pendingMetricsPort;
+
+        static int FreeLocalPort()
+        {
+            var l = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+            l.Start();
+            int port = ((IPEndPoint)l.LocalEndpoint).Port;
+            l.Stop();
+            return port;
+        }
+
         string AdminPasswordArg { get { return " -adminpassword " + Util.QuoteArg(S.AdminPassword); } }
 
         public void BuildCommand(out string exe, out string args)
@@ -103,6 +116,13 @@ namespace Ezpz
                 string gcArg = Util.QuoteArg("-Xlog:gc,gc+init:file=\"" + S.GcLogPath + "\":time,uptime,level,tags:filecount=5,filesize=20M");
                 int main = args.IndexOf("zombie.network.GameServer", StringComparison.Ordinal);
                 args = args.Substring(0, main) + gcArg + " " + args.Substring(main);
+            }
+            // PZ's built-in metrics server (read by the Home page instead of polling the stats console command).
+            if (args.IndexOf("-DprometheusPort", StringComparison.Ordinal) < 0)
+            {
+                pendingMetricsPort = FreeLocalPort();
+                int main = args.IndexOf("zombie.network.GameServer", StringComparison.Ordinal);
+                args = args.Substring(0, main) + "-DprometheusPort=" + pendingMetricsPort + " " + args.Substring(main);
             }
             args += " -servername " + Util.QuoteArg(S.ServerName);
             args += " " + Util.QuoteArg("-cachedir=" + S.DataDir);
@@ -166,6 +186,7 @@ namespace Ezpz
             p.BeginOutputReadLine();
             p.BeginErrorReadLine();
             StartedAt = DateTime.Now;
+            MetricsPort = pendingMetricsPort;
             SetState(ServerState.Starting);
         }
 
@@ -278,6 +299,8 @@ namespace Ezpz
                         if (detachedPid == 0)
                         {
                             detachedPid = Convert.ToInt32(mo["ProcessId"]);
+                            var mp = Regex.Match(cl, @"-DprometheusPort=(\d+)");
+                            MetricsPort = mp.Success ? int.Parse(mp.Groups[1].Value) : 0;
                             try { StartedAt = Process.GetProcessById(detachedPid).StartTime; } catch { StartedAt = DateTime.Now; }
                             Emit("[ezpz] Found a running server '" + S.ServerName + "' (PID " + detachedPid + "). Showing its console log; commands go via RCON.");
                             tailPos = File.Exists(S.ConsoleLogPath) ? Math.Max(0, new FileInfo(S.ConsoleLogPath).Length - 4000) : 0;

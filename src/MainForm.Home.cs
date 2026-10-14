@@ -163,11 +163,14 @@ namespace Ezpz
                 + "   ·   Memory settings: start " + S.MinRamGB + " GB, max " + S.MaxRamGB + " GB (Setup page)";
             lblPcNums.ForeColor = freeGB < 1.0 ? Theme.Warn : Theme.Muted;
 
-            var problems = HealthCheck.FindProblems(S, gc, crashTimes.Count);
+            double deadlocked;
+            lock (liveStats) liveStats.TryGetValue("jvm:deadlocked", out deadlocked);
+            var problems = HealthCheck.FindProblems(S, gc, crashTimes.Count, server.State == ServerState.Running ? (int)deadlocked : 0);
             lblProblems.Text = problems.Count == 0 ? "None found." : "• " + string.Join("\n• ", problems);
             lblProblems.ForeColor = problems.Count == 0 ? Theme.Muted : Theme.Warn;
 
-            if (server.State == ServerState.Running) { if ((DateTime.Now - lastStatsPoll).TotalSeconds >= 10) PollLiveStats(); }
+            // Metrics endpoint: cheap and silent, so every 5 s. The console "stats" fallback is logged by PZ, so once a minute.
+            if (server.State == ServerState.Running) { if ((DateTime.Now - lastStatsPoll).TotalSeconds >= (server.MetricsPort > 0 ? 5 : 60)) PollLiveStats(); }
             else UpdateTiles(false);
         }
 
@@ -358,9 +361,30 @@ namespace Ezpz
             return t;
         }
 
+        bool metricsBusy, statsFromMetrics;
+
         void PollLiveStats()
         {
             lastStatsPoll = DateTime.Now;
+            int port = server.MetricsPort;
+            if (port > 0)
+            {
+                if (metricsBusy) return;
+                metricsBusy = true;
+                System.Threading.Tasks.Task.Run(() => Metrics.ToStats(Metrics.Fetch(port))).ContinueWith(t => Ui(() =>
+                {
+                    metricsBusy = false;
+                    if (t.Exception == null)
+                    {
+                        lock (liveStats) { liveStats.Clear(); foreach (var kv in t.Result) liveStats[kv.Key] = kv.Value; }
+                        statsFromMetrics = true;
+                        UpdateTiles(true);
+                    }
+                    else UpdateTiles(false);   // the server may still be starting its metrics server
+                }));
+                return;
+            }
+            statsFromMetrics = false;
             statsCaptureUntil = DateTime.Now.AddSeconds(4);
             foreach (var g in StatGroups)
             {
@@ -406,9 +430,9 @@ namespace Ezpz
                 else text = v.ToString("0");
                 ((Label)statTiles.Controls[i].Controls[0]).Text = text;
             }
-            lblStatsNote.Text = live && s.Count > 0
-                ? "From the server's own stats command, updated " + DateTime.Now.ToString("HH:mm:ss") + ". Refreshes every 10 seconds while this page is open."
-                : "Shown while the server is running.";
+            lblStatsNote.Text = !live || s.Count == 0 ? "Shown while the server is running."
+                : statsFromMetrics ? "From the server's built-in metrics, updated " + DateTime.Now.ToString("HH:mm:ss") + ", every 5 seconds while this page is open."
+                : "From the server's stats command, once a minute. Restart the server from ezpz to switch to its built-in metrics, which update every 5 seconds and don't fill the server's logs.";
         }
     }
 
