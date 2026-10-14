@@ -45,7 +45,8 @@ namespace Ezpz
             lvLogs.Columns.Add("Player", 130);
             lvLogs.Columns.Add("What", 420);
             lvLogs.Columns.Add("Where", 120);
-            lvLogs.RetrieveVirtualItem += (s, e) => e.Item = MakeLogItem(logShown[e.ItemIndex]);
+            // the list can briefly ask for a row that's gone (e.g. right after switching servers); show it blank
+            lvLogs.RetrieveVirtualItem += (s, e) => e.Item = e.ItemIndex < logShown.Count ? MakeLogItem(logShown[e.ItemIndex]) : new ListViewItem(new[] { "", "", "", "", "" });
             lvLogs.SelectedIndexChanged += (s, e) => ShowLogDetail();
             lvLogs.ContextMenuStrip = BuildLogMenu();
             lvLogs.DoubleClick += (s, e) => OpenLogOnMap();

@@ -161,7 +161,7 @@ namespace Ezpz
             lblProblemsTitle.Text = title + ":";
             lblProblemsTitle.ForeColor = canContinue ? Theme.Warn : Theme.Danger;
             tbProblems.Text = "• " + string.Join(Environment.NewLine + Environment.NewLine + "• ", problems)
-                + Environment.NewLine + Environment.NewLine + "These are also saved in " + System.IO.Path.Combine(AppSettings.ManagerDir, "startup.log") + ".";
+                + Environment.NewLine + Environment.NewLine + "Details are saved in ezpz's log: " + AppLog.TodayPath;
             btnContinue.Visible = canContinue;
             if (!canContinue) { btnCopy.Left = 0; btnQuit.Left = 120; }
             var keep = Location;

@@ -106,7 +106,12 @@ namespace Ezpz
             else a();
         }
 
-        void Log(string s) { logQ.Enqueue(s); }
+        // Shows a line on the Console page and keeps it in ezpz's log file (see AppLog).
+        void Log(string s)
+        {
+            logQ.Enqueue(s);
+            if (!s.StartsWith("[ezpz] (harmless)")) AppLog.Write(s);
+        }
 
         // ================================================================== HEADER / NAV
 
@@ -714,9 +719,11 @@ namespace Ezpz
             clear.Click += (s, e) => rtb.Clear();
             var logs = Theme.Btn("Open logs folder");
             logs.Click += (s, e) => OpenFolder(S.LogsDir);
+            var appLog = Theme.Btn("ezpz log");
+            appLog.Click += (s, e) => OpenAppLog();
             chkAutoScroll = Theme.Check("Auto-scroll", true);
             chkAutoScroll.Margin = new Padding(8, 8, 0, 0);
-            top.Controls.AddRange(new Control[] { save, kill, clear, logs, chkAutoScroll });
+            top.Controls.AddRange(new Control[] { save, kill, clear, logs, appLog, chkAutoScroll });
             p.Controls.Add(top);
             var title = new Label { Text = "Console", Font = Theme.H1, Dock = DockStyle.Top, Height = 44, ForeColor = Theme.Text };
             p.Controls.Add(title);
@@ -762,6 +769,14 @@ namespace Ezpz
             histPos = history.Count;
             tbCmd.Clear();
             Cmd(c);
+        }
+
+        // ezpz's own log for today, for bug reports.
+        void OpenAppLog()
+        {
+            AppLog.Write("(log opened from the Console page)");
+            try { System.Diagnostics.Process.Start("notepad.exe", Util.QuoteArg(AppLog.TodayPath)); }
+            catch { OpenFolder(AppLog.Dir); }
         }
 
         void Cmd(string c)

@@ -54,6 +54,7 @@ namespace Ezpz
                 {
                     string what = steps[i].Key.Substring(0, 1).ToLower() + steps[i].Key.Substring(1);
                     problems.Add("Failed while " + what.Replace("Checking", "checking") + ": " + Explain(ex));
+                    AppLog.Error("startup step \"" + steps[i].Key + "\"", ex);
                 }
             }
             progress("Ready", 100);
@@ -61,7 +62,6 @@ namespace Ezpz
             if (problems.Count > 0)
             {
                 foreach (var p in problems) Log("[ezpz] Startup problem: " + p);
-                WriteStartupLog(problems);
             }
             return problems;
         }
@@ -75,18 +75,6 @@ namespace Ezpz
             if (ex is DirectoryNotFoundException || ex is FileNotFoundException) return "a file or folder is missing. " + ex.Message;
             if (ex is IOException) return "a file is in use or unreadable. " + ex.Message;
             return ex.Message;
-        }
-
-        void WriteStartupLog(List<string> problems)
-        {
-            try
-            {
-                Directory.CreateDirectory(AppSettings.ManagerDir);
-                File.AppendAllText(Path.Combine(AppSettings.ManagerDir, "startup.log"),
-                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  ezpz " + Program.Version + "  server " + S.ServerName + Environment.NewLine
-                    + string.Concat(problems.Select(p => "  " + p + Environment.NewLine)));
-            }
-            catch { }
         }
 
         static void CreateHandles(Control c)

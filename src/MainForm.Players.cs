@@ -370,7 +370,9 @@ namespace Ezpz
                 }
                 if (DateTime.Now < quietUntil && isPlayerLine) continue;
                 if (CaptureStats(l)) continue;
-                Log(l);
+                // ezpz's own lines and commands go in ezpz's log; the rest is in PZ's server-console.txt already
+                if (l.StartsWith("[ezpz]") || l.StartsWith("> ")) Log(l);
+                else logQ.Enqueue(l);
             }
         }
 

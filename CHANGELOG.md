@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- ezpz keeps its own log for bug reports: `%APPDATA%\ezpz\logs\ezpz-<date>.log`, one file per day, kept for 14 days. It records what ezpz did, the commands it sent, startup problems and every unexpected error with its full details. Passwords and Discord webhook links are never written. Open it with the new **ezpz log** button on the Console page, and the "Unexpected error" box says where it is. It replaces `startup.log`.
+- Fixed: switching servers while on the Logs page could pop up "Index was out of range" errors.
 - Players: the give-item and spawn-vehicle boxes now suggest as you type. Type part of a name or ID ("fire axe", "ambulance") and pick from the list. It's read from the installed server's own script files and the enabled mods (with the mod's name shown), so it always matches your server's build. The chosen item's name shows under the box, and ezpz asks before sending an ID the server doesn't know.
 - Players: the action panel no longer needs a sideways scroll bar, and the player list's IP column fits the space left. Scrolled to the bottom, the panel's last buttons (Lightning strike, Thunder) are no longer cut off. The buttons along the bottom wrap instead of being cut off on narrow windows, and the character sheet shrinks on short windows so the player list stays visible.
 - Logs: double-click a line with a location, or right-click it and choose View this spot on pzmap.org, to open that spot on the community map in your browser. Admin lines with decimal coordinates (such as spawned hordes) now show their location too.

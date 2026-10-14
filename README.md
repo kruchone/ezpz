@@ -88,7 +88,7 @@ Only paths inside the data folder that belong to the current server ID are ever 
 | SteamCMD | `C:\PZServer\steamcmd` |
 | Server data (saves, config, accounts, logs), passed to the server as `-cachedir` | `C:\PZServer\data` |
 | Backups | `C:\PZServer\backups` |
-| Startup problems | `%APPDATA%\ezpz\startup.log` (anything that failed to load behind the splash screen) |
+| ezpz's own log | `%APPDATA%\ezpz\logs\ezpz-<date>.log`, one file per day, kept 14 days. What ezpz did, the commands it sent and any errors with full details (passwords hidden). Open it from the Console page with **ezpz log**, and attach it to bug reports. |
 | ezpz settings | One file per server in `%APPDATA%\ezpz\servers\`, and `%APPDATA%\ezpz\ezpz.ini` for the active server. Admin passwords are encrypted with Windows DPAPI. |
 
 All of these can be changed on the Setup page.
