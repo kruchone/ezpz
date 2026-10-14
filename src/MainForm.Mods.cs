@@ -43,10 +43,13 @@ namespace Ezpz
             lvMods.Columns.Add("Needs", 140);
             lvMods.ItemCheck += OnModItemCheck;
             lvMods.ItemChecked += OnModItemChecked;
+            // When the list first appears, Windows replays every tick as untick-then-tick. Ignore those,
+            // or they would mark the page as changed and move ticked mods to the end of the load order.
+            lvMods.HandleCreated += (s, e) => { rebuildingMods = true; BeginInvoke((Action)(() => rebuildingMods = false)); };
             p.Controls.Add(lvMods);
 
             // issues + save row under the list
-            var bottom = new Panel { Dock = DockStyle.Bottom, Height = 170, Padding = new Padding(0, 10, 0, 0) };
+            var bottom = new Panel { Dock = DockStyle.Bottom, Height = 216, Padding = new Padding(0, 10, 0, 0) };
             tbModIssues = new TextBox
             {
                 Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical,
@@ -60,6 +63,7 @@ namespace Ezpz
             lblModsState = new Label { AutoSize = true, ForeColor = Theme.Muted, Margin = new Padding(12, 8, 0, 0) };
             saveRow.Controls.AddRange(new Control[] { save, revert, lblModsState });
             bottom.Controls.Add(tbModIssues);
+            bottom.Controls.Add(BuildModWatchRow());
             bottom.Controls.Add(saveRow);
             p.Controls.Add(bottom);
 
@@ -123,6 +127,7 @@ namespace Ezpz
             ScanAll();
             RebuildModList();
             ResolveTitles(wsOrder);
+            UpdateModWatchLabel();
         }
 
         void ScanAll()
@@ -205,6 +210,7 @@ namespace Ezpz
             string status;
             Color color;
             if (!m.HasB42) { status = "No B42 version"; color = Theme.Warn; }
+            else if (modsOutdated.Contains(m.WorkshopId)) { status = "Update available"; color = Theme.Warn; }
             else if (enabled && lastRun.Loaded.Contains(m.Id)) { status = "Loaded"; color = Theme.Accent; }
             else if (enabled) { status = modsDirty ? "On (save + restart)" : "On (restart to load)"; color = Theme.Text; }
             else { status = "Off"; color = Theme.Muted; }
@@ -229,6 +235,8 @@ namespace Ezpz
             if (rebuildingMods) return;
             string id = e.Item.Name.StartsWith("mod:") ? e.Item.Name.Substring(4) : null;
             if (id == null) return;
+            // Windows also raises this when the list first appears; only a real change counts.
+            if (e.Item.Checked == enabledMods.Contains(id)) return;
             if (e.Item.Checked && !enabledMods.Contains(id)) enabledMods.Add(id);
             if (!e.Item.Checked) enabledMods.Remove(id);
             modsDirty = true;

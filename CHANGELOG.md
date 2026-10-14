@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- New Sandbox page: a form for every world rule, built from the server's own SandboxVars file, with search, a changed-from-default filter and reset-to-default. It edits values in place, keeps a .bak copy, and falls back to Notepad if the file looks unfamiliar.
+- Mod update watcher: while the server runs, ezpz checks the Workshop for mod updates and can restart after a 5-minute in-game warning, or when nobody is online. Home and the Mods page show mod update status.
+- Fixed: opening the Mods page could mark it as changed and move ticked mods to the end of the load order.
 - Several servers: a switcher under the server name (top left) lists your servers and adds new ones. Each has its own settings and data folder and can share an install or use its own. One runs at a time, and ezpz checks that no other PZ server is running before starting. Existing settings become the first server automatically.
 - New Home page, opened first: server status and quick actions, an at-a-glance row (EBS, mods, last backup, next restart, server build), a server update check with one-click update, and the health section. The separate Health page is gone.
 - The window title now reads `<Server ID>: <status> — ezpz <version>`.

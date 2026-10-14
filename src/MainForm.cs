@@ -67,6 +67,7 @@ namespace Ezpz
 
             BuildSetup();
             BuildConfig();
+            BuildSandbox();
             BuildMods();
             BuildConsole();
             BuildHome();
@@ -135,7 +136,7 @@ namespace Ezpz
 
         void BuildNav()
         {
-            string[] names = { "Home", "Setup", "Configure", "Mods", "Console", "Players & Admin", "World & Weather", "Backups", "Reset" };
+            string[] names = { "Home", "Setup", "Configure", "Sandbox", "Mods", "Console", "Players & Admin", "World & Weather", "Backups", "Reset" };
             int y = 14;
             for (int i = 0; i < names.Length; i++)
             {
@@ -158,14 +159,14 @@ namespace Ezpz
         }
 
         // Page numbers, in nav order.
-        const int PHome = 0, PSetup = 1, PConfig = 2, PMods = 3, PConsole = 4, PPlayers = 5, PWorld = 6, PBackups = 7, PReset = 8;
+        const int PHome = 0, PSetup = 1, PConfig = 2, PSandbox = 3, PMods = 4, PConsole = 5, PPlayers = 6, PWorld = 7, PBackups = 8, PReset = 9;
 
         public int StartPage;
         int currentPage = -1;
         void ShowPage(int i)
         {
             currentPage = i;
-            Control[] all = { pgHome, pgSetup, pgConfig, pgMods, pgConsole, pgPlayers, pgWorld, pgBackups, pgReset };
+            Control[] all = { pgHome, pgSetup, pgConfig, pgSandbox, pgMods, pgConsole, pgPlayers, pgWorld, pgBackups, pgReset };
             for (int k = 0; k < all.Length; k++)
             {
                 all[k].Visible = k == i;
@@ -173,6 +174,7 @@ namespace Ezpz
             }
             if (i == PSetup) RefreshChecklist();
             if (i == PConfig) LoadConfig();
+            if (i == PSandbox) RefreshSandbox(false);
             if (i == PMods) RefreshMods(false);
             if (i == PHome) RefreshHome();
             if (i == PPlayers) RefreshPlayers(true);
@@ -492,8 +494,8 @@ namespace Ezpz
 
             p.H2("World rules (sandbox), spawns & imports");
             p.P("Zombie count, loot, XP, day length and similar world rules are in the SandboxVars file. Edit it directly, or set up a game with the in-game Host menu and import its files here.");
-            var sb = Theme.Btn("Edit SandboxVars");
-            sb.Click += (s, e) => EditFile(S.SandboxPath);
+            var sb = Theme.Btn("Sandbox (world rules)");
+            sb.Click += (s, e) => ShowPage(PSandbox);
             var sr = Theme.Btn("Edit spawn regions");
             sr.Click += (s, e) => EditFile(S.SpawnRegionsPath);
             var ini = Theme.Btn("Edit .ini in Notepad");
@@ -1085,6 +1087,7 @@ namespace Ezpz
             }
             UpdateStats();
             PlayersTick();
+            ModWatchTick();
             if (currentPage == PHome && ticks % 3 == 0) RefreshHome();
 
             // scheduled restarts with in-game warnings

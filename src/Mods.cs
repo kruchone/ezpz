@@ -17,6 +17,7 @@ namespace Ezpz
         public string Title = "";
         public long Size;
         public DateTime Updated;
+        public long UpdatedUnix;
         public string[] Tags = new string[0];
         public bool Resolved;
         public bool IsB42Tagged { get { return Tags.Any(t => t.IndexOf("Build 42", StringComparison.OrdinalIgnoreCase) >= 0); } }
@@ -84,7 +85,7 @@ namespace Ezpz
                         it.Title = Str(d, "title");
                         long n;
                         if (long.TryParse(Str(d, "file_size"), out n)) it.Size = n;
-                        if (long.TryParse(Str(d, "time_updated"), out n)) it.Updated = DateTimeOffset.FromUnixTimeSeconds(n).LocalDateTime;
+                        if (long.TryParse(Str(d, "time_updated"), out n)) { it.UpdatedUnix = n; it.Updated = DateTimeOffset.FromUnixTimeSeconds(n).LocalDateTime; }
                         object tags;
                         if (d.TryGetValue("tags", out tags)) it.Tags = Arr(tags).Select(t => Str(Obj(t), "tag")).ToArray();
                     }
@@ -118,6 +119,39 @@ namespace Ezpz
         public static string ContentDir(AppSettings s)
         {
             return Path.Combine(s.InstallDir, "steamapps", "workshop", "content", GameAppId);
+        }
+
+        // Workshop id -> "timeupdated" of the copy the server has, from steamapps\workshop\appworkshop_108600.acf.
+        public static Dictionary<string, long> InstalledTimes(AppSettings s)
+        {
+            var d = new Dictionary<string, long>();
+            string acf = Path.Combine(s.InstallDir, "steamapps", "workshop", "appworkshop_" + GameAppId + ".acf");
+            if (!File.Exists(acf)) return d;
+            string text = File.ReadAllText(acf);
+            int start = text.IndexOf("\"WorkshopItemsInstalled\"", StringComparison.Ordinal);
+            if (start < 0) return d;
+            int end = text.IndexOf("\"WorkshopItemDetails\"", start, StringComparison.Ordinal);
+            string block = end > start ? text.Substring(start, end - start) : text.Substring(start);
+            foreach (Match m in Regex.Matches(block, "\"(\\d+)\"\\s*\\{[^}]*?\"timeupdated\"\\s+\"(\\d+)\"", RegexOptions.Singleline))
+                d[m.Groups[1].Value] = long.Parse(m.Groups[2].Value);
+            return d;
+        }
+
+        // Items whose Workshop version is newer than the server's copy (and items not downloaded at all).
+        public static List<string> Outdated(AppSettings s, IList<string> ids, out List<string> missing)
+        {
+            missing = new List<string>();
+            var outdated = new List<string>();
+            if (ids.Count == 0) return outdated;
+            var local = InstalledTimes(s);
+            foreach (var kv in GetDetails(ids))
+            {
+                if (!kv.Value.Resolved) continue;
+                long have;
+                if (!local.TryGetValue(kv.Key, out have)) missing.Add(kv.Key);
+                else if (kv.Value.UpdatedUnix > have) outdated.Add(kv.Key);
+            }
+            return outdated;
         }
 
         public static bool IsDownloaded(AppSettings s, string id)

@@ -54,6 +54,7 @@ namespace Ezpz
             if (id.Equals(S.ProfileId, StringComparison.OrdinalIgnoreCase)) return;
             if (busy != null) { Warn("Please wait: " + busy); return; }
             if (modsDirty && !Confirm("You have unsaved changes on the Mods page. Discard them and switch servers?")) return;
+            if (SandboxDirty && !Confirm("You have unsaved changes on the Sandbox page. Discard them and switch servers?")) return;
             if (server.State != ServerState.Stopped)
             {
                 if (!Confirm("\"" + S.ServerName + "\" is running. Only one server runs at a time.\n\nStop it (saving the world) and switch?")) return;
@@ -92,6 +93,9 @@ namespace Ezpz
             crashTimes.Clear();
             restartWarned.Clear();
             serverCpuPct = -1; lastCpuAt = DateTime.MinValue;
+            sandbox = null;
+            modsOutdated = new List<string>(); modsMissing = new List<string>();
+            lastModCheck = DateTime.MinValue; modRestartAt = null; modRestartWhenEmpty = false; modCheckError = null;
         }
 
         // Controls that were filled from the old server's settings.
@@ -111,6 +115,7 @@ namespace Ezpz
             chkUpdateOnRestart.Checked = S.UpdateOnRestart;
             chkBackupOnStart.Checked = S.BackupOnStart;
             numKeepBackups.Value = Math.Max(numKeepBackups.Minimum, Math.Min(numKeepBackups.Maximum, S.KeepAutoBackups));
+            cbModAction.SelectedIndex = Math.Max(0, Math.Min(2, S.ModUpdateAction));
         }
 
         // ---------- add / remove

@@ -28,6 +28,8 @@ namespace Ezpz
         public bool UpdateOnRestart = false;
         public bool BackupOnStart = true;
         public int KeepAutoBackups = 10;
+        public int ModUpdateAction = 1;    // 0 = just tell me, 1 = restart after a 5-minute warning, 2 = restart when nobody is online
+        public int ModCheckMinutes = 10;
 
         // Which profile file this is (a property, so it isn't written into the file).
         public string ProfileId { get; set; }

@@ -87,7 +87,7 @@ namespace Ezpz
 
             // ---- server updates
             p.H2("Server updates");
-            lblUpdate = Fixed(p, 44, Theme.Text);
+            lblUpdate = Fixed(p, 64, Theme.Text);
             var check = Theme.Btn("Check for updates");
             check.Click += async (s, e) => await CheckForUpdate(true);
             btnUpdateNow = Theme.Btn("Update now");
@@ -289,8 +289,9 @@ namespace Ezpz
             else if (latestBuild == null) text = "Installed: build " + installed + " (" + branch + " branch).";
             else if (behind) text = "Update available: build " + latestBuild + " (you have " + installed + "). Players' games must be on the same version as the server, so update soon after Steam updates the game.";
             else text = "Up to date: build " + installed + " is the newest on the " + branch + " branch (checked " + FriendlyTime(lastUpdateCheck) + ").";
+            if (ModConfig.Split(IniFile.Load(S.IniPath).Get("WorkshopItems", "")).Count > 0) text += "\n" + ModWatchSummary();
             lblUpdate.Text = text;
-            lblUpdate.ForeColor = behind ? Theme.Warn : updateError != null ? Theme.Muted : Theme.Text;
+            lblUpdate.ForeColor = behind || modsOutdated.Count > 0 ? Theme.Warn : updateError != null ? Theme.Muted : Theme.Text;
             btnUpdateNow.BackColor = behind ? Theme.AccentBtn : Theme.Card;
         }
 
