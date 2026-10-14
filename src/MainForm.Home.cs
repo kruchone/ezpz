@@ -27,7 +27,7 @@ namespace Ezpz
         Label lblVerdict, lblVerdictDetail, lblHeapNums, lblPcNums, lblProblems, lblStatsNote;
         HeapChart heapChart;
         FlowLayoutPanel statTiles;
-        readonly GcLogReader gcReader = new GcLogReader();
+        GcLogReader gcReader = new GcLogReader();
         TimeSpan lastCpu;
         DateTime lastCpuAt;
         double serverCpuPct = -1;

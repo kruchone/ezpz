@@ -18,8 +18,8 @@ namespace Ezpz
         const string FirewallRule = "ezpz - Project Zomboid";
         const string LegacyFirewallRule = "PZ Server Manager - Project Zomboid";
 
-        readonly AppSettings S;
-        readonly ServerController server;
+        AppSettings S;                // the server being managed; swapped by SwitchServer
+        ServerController server;
         readonly ConcurrentQueue<string> logQ = new ConcurrentQueue<string>();
         readonly Timer uiTimer = new Timer();
         readonly Timer detectTimer = new Timer();
@@ -32,7 +32,8 @@ namespace Ezpz
         Panel pgConsole, pgPlayers;
 
         // header
-        Label lblStatus, lblStats, lblBusy, lblHeaderName;
+        Label lblStatus, lblStats, lblBusy, lblHeaderName, lblNavData;
+        Button btnServerSwitch;
         Button btnStart, btnStop, btnRestart;
 
         string busy;                 // non-null while a long task runs
@@ -45,9 +46,7 @@ namespace Ezpz
         {
             S = AppSettings.Load();
             server = new ServerController(S);
-            server.Output += OnServerOutput;
-            server.StateChanged += () => Ui(OnStateChanged);
-            server.UnexpectedExit += () => Ui(OnCrash);
+            WireServer(server, true);
 
             UpdateTitle();
             Font = Theme.Base;
@@ -110,8 +109,13 @@ namespace Ezpz
         {
             var h = new Panel { Dock = DockStyle.Top, Height = 64, BackColor = Theme.Side };
             Controls.Add(h);
-            var title = new Label { Text = "ezpz  ·  Project Zomboid B42 Dedicated Server", Font = Theme.H2, ForeColor = Theme.Text, AutoSize = true, Location = new Point(16, 10) };
-            lblHeaderName = new Label { ForeColor = Theme.Muted, AutoSize = true, Location = new Point(18, 36) };
+            // Server switcher: click the server name to switch, add or remove servers.
+            btnServerSwitch = new Button { Font = Theme.H2, ForeColor = Theme.Text, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Location = new Point(10, 4), FlatStyle = FlatStyle.Flat, BackColor = Theme.Side, Cursor = Cursors.Hand, Padding = new Padding(2, 0, 2, 0) };
+            btnServerSwitch.FlatAppearance.BorderSize = 0;
+            btnServerSwitch.FlatAppearance.MouseOverBackColor = Theme.Card;
+            btnServerSwitch.Click += (s, e) => ShowServerMenu();
+            var title = btnServerSwitch;
+            lblHeaderName = new Label { ForeColor = Theme.Muted, AutoSize = true, Location = new Point(18, 38) };
             lblStatus = new Label { Font = Theme.H2, AutoSize = true, Location = new Point(430, 10) };
             lblStats = new Label { ForeColor = Theme.Muted, AutoSize = true, Location = new Point(432, 36) };
             lblBusy = new Label { ForeColor = Theme.Warn, AutoSize = true, Location = new Point(640, 22) };
@@ -149,8 +153,8 @@ namespace Ezpz
                 y += i == PHome ? 54 : 44;
             }
             navButtons[PReset].ForeColor = Theme.Danger;
-            var ver = new Label { Text = "Data:\n" + S.DataDir, ForeColor = Theme.Muted, AutoSize = true, MaximumSize = new Size(200, 0), Location = new Point(14, y + 20) };
-            nav.Controls.Add(ver);
+            lblNavData = new Label { Text = "Data:\n" + S.DataDir, ForeColor = Theme.Muted, AutoSize = true, MaximumSize = new Size(200, 0), Location = new Point(14, y + 20) };
+            nav.Controls.Add(lblNavData);
         }
 
         // Page numbers, in nav order.
@@ -317,7 +321,9 @@ namespace Ezpz
 
         void RefreshAll()
         {
-            lblHeaderName.Text = "Server ID: " + S.ServerName + "    ·    " + S.DataDir;
+            btnServerSwitch.Text = S.ServerName + "  ▾";
+            lblHeaderName.Text = S.DataDir + "    ·    click the name to switch or add servers";
+            lblNavData.Text = "Data:\n" + S.DataDir;
             UpdateTitle();
             RefreshChecklist();
             OnStateChanged();
@@ -329,7 +335,7 @@ namespace Ezpz
             lblBuild.Text = bi != null ? "Installed: " + bi + " in " + S.InstallDir : "Not installed yet.";
             bool[] done =
             {
-                AppSettings.ValidServerName(S.ServerName) && S.AdminPassword.Length > 0 && File.Exists(Path.Combine(AppSettings.ManagerDir, "manager.ini")),
+                AppSettings.ValidServerName(S.ServerName) && S.AdminPassword.Length > 0 && S.IsSaved,
                 File.Exists(S.StartBat),
                 File.Exists(S.IniPath),
                 firewallOk,
@@ -676,16 +682,16 @@ namespace Ezpz
             input.Controls.Add(send);
 
             var opts = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 44, WrapContents = false, Padding = new Padding(0, 10, 0, 0) };
-            var auto = Theme.Check("Auto-restart on crash", S.AutoRestart);
+            var auto = chkAutoRestart = Theme.Check("Auto-restart on crash", S.AutoRestart);
             auto.CheckedChanged += (s, e) => { S.AutoRestart = auto.Checked; S.Save(); };
             var lbl = new Label { Text = "Scheduled restart every", AutoSize = true, Margin = new Padding(16, 4, 4, 0) };
-            var hrs = Theme.Num(0, 168, S.RestartHours);
+            var hrs = numRestartHours = Theme.Num(0, 168, S.RestartHours);
             hrs.Width = 60;
             hrs.ValueChanged += (s, e) => { S.RestartHours = (int)hrs.Value; S.Save(); };
             var lbl2 = new Label { Text = "hours (0 = off)", AutoSize = true, Margin = new Padding(4, 4, 16, 0) };
-            var upd = Theme.Check("Update game on scheduled restart", S.UpdateOnRestart);
+            var upd = chkUpdateOnRestart = Theme.Check("Update game on scheduled restart", S.UpdateOnRestart);
             upd.CheckedChanged += (s, e) => { S.UpdateOnRestart = upd.Checked; S.Save(); };
-            var bos = Theme.Check("Back up on start", S.BackupOnStart);
+            var bos = chkBackupOnStart = Theme.Check("Back up on start", S.BackupOnStart);
             bos.Margin = new Padding(16, 3, 0, 0);
             bos.CheckedChanged += (s, e) => { S.BackupOnStart = bos.Checked; S.Save(); };
             opts.Controls.AddRange(new Control[] { auto, lbl, hrs, lbl2, upd, bos });
@@ -763,7 +769,7 @@ namespace Ezpz
             var refresh = Theme.Btn("Refresh");
             refresh.Click += (s, e) => RefreshBackupList();
             p.Buttons(now, restore, del, open, refresh);
-            var keep = p.Row("Keep this many auto-backups", Theme.Num(1, 500, S.KeepAutoBackups), 80);
+            var keep = numKeepBackups = p.Row("Keep this many auto-backups", Theme.Num(1, 500, S.KeepAutoBackups), 80);
             keep.ValueChanged += (s, e) => { S.KeepAutoBackups = (int)keep.Value; S.Save(); };
             p.Hint("Older automatic start-up backups are deleted. Manual, pre-reset and pre-restore backups are never deleted automatically.");
 
@@ -1006,6 +1012,13 @@ namespace Ezpz
             if (!File.Exists(S.StartBat)) { Warn("The server isn't installed yet. Use 'Install / Update server' on the Setup page."); ShowPage(PSetup); return; }
             if (S.AdminPassword == "") { Warn("Set an admin password on the Setup page first."); ShowPage(PSetup); return; }
             if (busy != null) { Warn("Please wait: " + busy); return; }
+            var others = await Task.Run(() => OtherRunningServers());
+            if (others.Count > 0)
+            {
+                Warn("Another Project Zomboid server is already running on this PC (" + string.Join(", ", others) + ").\n\n"
+                   + "ezpz runs one server at a time. Switch to that server with the server name at the top left and stop it first.");
+                return;
+            }
             restartWarned.Clear();
             if (S.BackupOnStart && Directory.Exists(S.SaveDir)) await BackupFlow("auto");
             try

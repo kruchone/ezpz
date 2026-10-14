@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -9,7 +10,8 @@ using System.Text.RegularExpressions;
 
 namespace Ezpz
 {
-    // App settings, persisted to %APPDATA%\ezpz\manager.ini
+    // Settings for one server ("profile"). Each lives in %APPDATA%\ezpz\servers\<id>.ini;
+    // %APPDATA%\ezpz\ezpz.ini remembers which one is active.
     public class AppSettings
     {
         public string InstallDir = @"C:\PZServer\server";
@@ -27,6 +29,9 @@ namespace Ezpz
         public bool BackupOnStart = true;
         public int KeepAutoBackups = 10;
 
+        // Which profile file this is (a property, so it isn't written into the file).
+        public string ProfileId { get; set; }
+
         public static string ManagerDir
         {
             get
@@ -35,23 +40,101 @@ namespace Ezpz
                 return !string.IsNullOrEmpty(over) ? over : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ezpz");
             }
         }
-        static string FilePath { get { return Path.Combine(ManagerDir, "manager.ini"); } }
+        static string ServersDir { get { return Path.Combine(ManagerDir, "servers"); } }
+        static string GlobalFile { get { return Path.Combine(ManagerDir, "ezpz.ini"); } }
+        public string ProfilePath { get { return Path.Combine(ServersDir, ProfileId + ".ini"); } }
 
-        // Settings folder used before the app was renamed to ezpz.
+        // Single-server settings files from before profiles (ezpz 1.0 and the pre-rename app).
+        static string OldSingleFile { get { return Path.Combine(ManagerDir, "manager.ini"); } }
         static string LegacyFile
         {
             get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PZServerManager", "manager.ini"); }
         }
 
-        public static AppSettings Load()
+        // ---- profiles
+
+        public static List<string> ProfileIds()
+        {
+            Migrate();
+            if (!Directory.Exists(ServersDir)) return new List<string>();
+            return Directory.GetFiles(ServersDir, "*.ini").Select(Path.GetFileNameWithoutExtension).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        public static string ActiveProfileId
+        {
+            get
+            {
+                Migrate();
+                var ids = ProfileIds();
+                string active = null;
+                if (File.Exists(GlobalFile))
+                    foreach (var l in File.ReadAllLines(GlobalFile))
+                        if (l.StartsWith("ActiveServer=")) active = l.Substring(13).Trim();
+                if (active != null && ids.Contains(active, StringComparer.OrdinalIgnoreCase)) return active;
+                return ids.Count > 0 ? ids[0] : "pzserver";
+            }
+            set
+            {
+                Directory.CreateDirectory(ManagerDir);
+                File.WriteAllText(GlobalFile, "ActiveServer=" + value + Environment.NewLine);
+            }
+        }
+
+        // A file-name-safe, unused profile id based on the server name.
+        public static string NewProfileId(string serverName)
+        {
+            string baseId = Regex.Replace(serverName ?? "", @"[^A-Za-z0-9_\-]", "");
+            if (baseId == "") baseId = "server";
+            var ids = new HashSet<string>(ProfileIds(), StringComparer.OrdinalIgnoreCase);
+            string id = baseId;
+            for (int n = 2; ids.Contains(id); n++) id = baseId + "-" + n;
+            return id;
+        }
+
+        public static void RemoveProfile(string id)
+        {
+            string f = Path.Combine(ServersDir, id + ".ini");
+            if (File.Exists(f)) File.Delete(f);
+        }
+
+        // One-time move from the single-server settings file to the first profile.
+        static void Migrate()
+        {
+            if (Directory.Exists(ServersDir) && Directory.GetFiles(ServersDir, "*.ini").Length > 0) return;
+            string src = File.Exists(OldSingleFile) ? OldSingleFile
+                       : File.Exists(LegacyFile) && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("EZPZ_HOME")) ? LegacyFile
+                       : null;
+            if (src == null) return;
+            try
+            {
+                var old = Parse(src);
+                Directory.CreateDirectory(ServersDir);
+                string id = Regex.Replace(old.ServerName ?? "", @"[^A-Za-z0-9_\-]", "");
+                if (id == "") id = "server";
+                File.Copy(src, Path.Combine(ServersDir, id + ".ini"));
+                File.WriteAllText(GlobalFile, "ActiveServer=" + id + Environment.NewLine);
+            }
+            catch { }
+        }
+
+        public static AppSettings Load() { return Load(ActiveProfileId); }
+
+        public static AppSettings Load(string id)
+        {
+            var s = new AppSettings { ProfileId = id };
+            if (File.Exists(s.ProfilePath))
+            {
+                var parsed = Parse(s.ProfilePath);
+                parsed.ProfileId = id;
+                return parsed;
+            }
+            return s;
+        }
+
+        static AppSettings Parse(string file)
         {
             var s = new AppSettings();
-            if (!File.Exists(FilePath) && File.Exists(LegacyFile) && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("EZPZ_HOME")))
-            {
-                try { Directory.CreateDirectory(ManagerDir); File.Copy(LegacyFile, FilePath); } catch { }
-            }
-            if (!File.Exists(FilePath)) return s;
-            foreach (var line in File.ReadAllLines(FilePath))
+            foreach (var line in File.ReadAllLines(file))
             {
                 int i = line.IndexOf('=');
                 if (i <= 0) continue;
@@ -69,15 +152,25 @@ namespace Ezpz
             return s;
         }
 
+        public bool IsSaved { get { return File.Exists(ProfilePath); } }
+
         public void Save()
         {
-            Directory.CreateDirectory(ManagerDir);
+            Directory.CreateDirectory(ServersDir);
             var sb = new StringBuilder();
             foreach (var f in typeof(AppSettings).GetFields(BindingFlags.Public | BindingFlags.Instance))
                 sb.AppendLine(f.Name + "=" + Convert.ToString(f.GetValue(this)));
-            File.WriteAllText(FilePath, sb.ToString());
+            File.WriteAllText(ProfilePath, sb.ToString());
         }
 
+        // A copy for a new server: same shared folders and preferences, no password.
+        public AppSettings CopyForNewServer()
+        {
+            var n = (AppSettings)MemberwiseClone();
+            n.AdminPasswordProtected = "";
+            n.ProfileId = null;
+            return n;
+        }
         // Admin password is encrypted with Windows DPAPI (only this Windows user can read it).
         public string AdminPassword
         {

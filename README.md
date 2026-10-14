@@ -23,6 +23,7 @@ ezpz is a single `.exe` with no installer and no dependencies. It walks you thro
 - **Home.** Opens first. It shows the server's status, uptime, players and join address, with quick actions (save, back up, message everyone). An at-a-glance row has the EBS radio frequency, mods, last backup, next restart and server build. It checks Steam for server updates and updates with one click (stop, update, start). Its health section shows how much memory the world actually needs, measured by Java rather than Windows, charted against your max, with a plain verdict and a concrete suggestion. Live tiles from PZ's built-in `stats` command show players, server FPS, zombies, loaded map cells, network traffic and today's kills and deaths. It also flags pauses waiting for memory, out-of-memory errors, Java crash reports and a max set too high for the PC.
 - **Players & Admin.** Everyone who has ever joined, with online status, role, last seen, Steam ID and IP. One click sets a role (admin, moderator, gm, observer, priority, user). Also: kick, ban (optionally including the IP), mute voice, reset a password, god mode, invisibility, no-clip, teleport, give items, XP or vehicles, spawn hordes, lightning, and broadcast messages.
 - **World & Weather.** Shows the world's Emergency Broadcast (EBS) radio frequency. Starts rain (with intensity), storms (with length), or clears the weather. Triggers lightning, thunder, helicopter and gunshot events.
+- **Several servers.** Click the server name at the top left to switch servers or add one. Each server has its own settings and data folder, and can share an install or have its own (for example, a second install on a different Steam branch). One runs at a time: switching offers to stop the running server, and ezpz won't start a server while another Project Zomboid server is running on the PC.
 - **Backups.** One-click `.zip` backups of the world, accounts and config, with restore. Automatic backups on start, before a restore and before a reset.
 - **Reset.** Presets from "new world, keep everything else" up to "factory reset". Before anything is deleted you see exactly what will go and how big it is. A backup is made first, and you type the server ID to confirm.
 
@@ -62,7 +63,7 @@ Only paths inside the data folder that belong to the current server ID are ever 
 | SteamCMD | `C:\PZServer\steamcmd` |
 | Server data (saves, config, accounts, logs), passed to the server as `-cachedir` | `C:\PZServer\data` |
 | Backups | `C:\PZServer\backups` |
-| ezpz settings | `%APPDATA%\ezpz\manager.ini` (the admin password is encrypted with Windows DPAPI) |
+| ezpz settings | One file per server in `%APPDATA%\ezpz\servers\`, and `%APPDATA%\ezpz\ezpz.ini` for the active server. Admin passwords are encrypted with Windows DPAPI. |
 
 All of these can be changed on the Setup page.
 
