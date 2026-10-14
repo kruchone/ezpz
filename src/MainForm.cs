@@ -28,6 +28,7 @@ namespace Ezpz
         readonly List<Button> navButtons = new List<Button>();
         readonly List<Page> pages = new List<Page>();
         Page pgSetup, pgConfig, pgWorld, pgBackups, pgReset;
+        Panel pgMods;
         Panel pgConsole, pgPlayers;
 
         // header
@@ -67,7 +68,9 @@ namespace Ezpz
 
             BuildSetup();
             BuildConfig();
+            BuildMods();
             BuildConsole();
+            BuildHealth();
             BuildPlayers();
             BuildWorld();
             BuildBackups();
@@ -128,14 +131,14 @@ namespace Ezpz
 
         void BuildNav()
         {
-            string[] names = { "1   Setup", "2   Configure", "3   Console", "4   Players & Admin", "5   World & Weather", "6   Backups", "7   Reset" };
+            string[] names = { "Setup", "Configure", "Mods", "Console", "Health", "Players & Admin", "World & Weather", "Backups", "Reset" };
             int y = 14;
             for (int i = 0; i < names.Length; i++)
             {
                 int idx = i;
                 var b = new Button
                 {
-                    Text = names[i], FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
+                    Text = (i + 1) + "   " + names[i], FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
                     Size = new Size(200, 40), Location = new Point(10, y), ForeColor = Theme.Text, Font = Theme.Bold,
                     BackColor = Theme.Side, Cursor = Cursors.Hand, Padding = new Padding(8, 0, 0, 0)
                 };
@@ -145,28 +148,33 @@ namespace Ezpz
                 navButtons.Add(b);
                 y += 44;
             }
-            navButtons[6].ForeColor = Theme.Danger;
+            navButtons[PReset].ForeColor = Theme.Danger;
             var ver = new Label { Text = "Data:\n" + S.DataDir, ForeColor = Theme.Muted, AutoSize = true, MaximumSize = new Size(200, 0), Location = new Point(14, y + 20) };
             nav.Controls.Add(ver);
         }
+
+        // Page numbers, in nav order.
+        const int PSetup = 0, PConfig = 1, PMods = 2, PConsole = 3, PHealth = 4, PPlayers = 5, PWorld = 6, PBackups = 7, PReset = 8;
 
         public int StartPage;
         int currentPage = -1;
         void ShowPage(int i)
         {
             currentPage = i;
-            Control[] all = { pgSetup, pgConfig, pgConsole, pgPlayers, pgWorld, pgBackups, pgReset };
+            Control[] all = { pgSetup, pgConfig, pgMods, pgConsole, pgHealth, pgPlayers, pgWorld, pgBackups, pgReset };
             for (int k = 0; k < all.Length; k++)
             {
                 all[k].Visible = k == i;
                 navButtons[k].BackColor = k == i ? Theme.Card : Theme.Side;
             }
-            if (i == 0) RefreshChecklist();
-            if (i == 1) LoadConfig();
-            if (i == 3) RefreshPlayers(true);
-            if (i == 4) RefreshWorld();
-            if (i == 5) RefreshBackupList();
-            if (i == 6) UpdateResetPreview();
+            if (i == PSetup) RefreshChecklist();
+            if (i == PConfig) LoadConfig();
+            if (i == PMods) RefreshMods(false);
+            if (i == PHealth) RefreshHealth();
+            if (i == PPlayers) RefreshPlayers(true);
+            if (i == PWorld) RefreshWorld();
+            if (i == PBackups) RefreshBackupList();
+            if (i == PReset) UpdateResetPreview();
         }
 
         Page NewPage()
@@ -373,7 +381,7 @@ namespace Ezpz
             try
             {
                 if (server.State != ServerState.Stopped) { Warn("Stop the server before installing or updating."); return; }
-                ShowPage(2);
+                ShowPage(PConsole);
                 await SteamCmd.InstallOrUpdate(S, validate, Log);
             }
             catch (Exception ex) { Log("[steamcmd] ERROR: " + ex.Message); Warn(ex.Message); }
@@ -443,9 +451,6 @@ namespace Ezpz
             new Field("UDPPort", "Second UDP port", "int", null),
             new Field("RCONPort", "RCON port (TCP)", "int", "Lets the manager control a server it didn't start. No need to forward this port."),
             new Field("RCONPassword", "RCON password", "text", null),
-            new Field("Mods", "Mods", "text", "Mod IDs separated by ; (copy them from each mod's Workshop page)."),
-            new Field("WorkshopItems", "Workshop item IDs", "text", "Steam Workshop numbers separated by ; (the server downloads these on start)."),
-            new Field("Map", "Map", "text", "Map folders separated by ; with Muldraugh, KY last."),
         };
 
         readonly Dictionary<string, Control> cfgCtl = new Dictionary<string, Control>();
@@ -458,7 +463,7 @@ namespace Ezpz
             var p = pgConfig = NewPage();
             p.H1("Configure");
             lblCfgMissing = p.P("No config file yet. Click 'Generate default config' on the Setup page first, so you start from Project Zomboid's full default settings.", Theme.Warn);
-            p.P("Most settings take effect after a restart. Click 'Apply live' to reload settings on a running server.");
+            p.P("Most settings take effect after a restart. Click 'Apply live' to reload settings on a running server. Mods are set up on the Mods page.");
 
             var reload = Theme.Btn("Reload from disk");
             reload.Click += (s, e) => LoadConfig();
@@ -727,6 +732,7 @@ namespace Ezpz
 
         static Color ColorFor(string s)
         {
+            if (s.StartsWith("[ezpz] (harmless)")) return Theme.Muted;
             if (s.StartsWith("[ezpz]")) return Theme.Accent;
             if (s.StartsWith("[steamcmd]")) return Theme.Info;
             if (s.StartsWith("[backup]") || s.StartsWith("[reset]")) return Theme.Warn;
@@ -996,14 +1002,14 @@ namespace Ezpz
         async Task StartFlow()
         {
             if (server.State != ServerState.Stopped) { Info("The server is already " + server.State.ToString().ToLower() + "."); return; }
-            if (!File.Exists(S.StartBat)) { Warn("The server isn't installed yet. Use 'Install / Update server' on the Setup page."); ShowPage(0); return; }
-            if (S.AdminPassword == "") { Warn("Set an admin password on the Setup page first."); ShowPage(0); return; }
+            if (!File.Exists(S.StartBat)) { Warn("The server isn't installed yet. Use 'Install / Update server' on the Setup page."); ShowPage(PSetup); return; }
+            if (S.AdminPassword == "") { Warn("Set an admin password on the Setup page first."); ShowPage(PSetup); return; }
             if (busy != null) { Warn("Please wait: " + busy); return; }
             restartWarned.Clear();
             if (S.BackupOnStart && Directory.Exists(S.SaveDir)) await BackupFlow("auto");
             try
             {
-                ShowPage(2);
+                ShowPage(PConsole);
                 server.Start();
             }
             catch (Exception ex) { Log("[ezpz] ERROR: " + ex.Message); Warn(ex.Message); server.StopWhenStarted = false; }
@@ -1053,9 +1059,10 @@ namespace Ezpz
 
         void OnSecond()
         {
+            ticks++;
             if (!server.Attached)
             {
-                if (++ticks % 5 == 0 && !detecting)
+                if (ticks % 5 == 0 && !detecting)
                 {
                     detecting = true;
                     Task.Run(() => { try { server.DetectExisting(); } finally { detecting = false; } });
@@ -1064,6 +1071,7 @@ namespace Ezpz
             }
             UpdateStats();
             PlayersTick();
+            if (currentPage == PHealth && ticks % 3 == 0) RefreshHealth();
 
             // scheduled restarts with in-game warnings
             if (server.State == ServerState.Running && S.RestartHours > 0 && busy == null)
@@ -1105,7 +1113,7 @@ namespace Ezpz
             btnStart.BackColor = btnStart.Enabled ? Theme.AccentBtn : Theme.Card;
             btnStop.Enabled = st == ServerState.Running || st == ServerState.Starting;
             btnRestart.Enabled = st == ServerState.Running;
-            if (currentPage == 0) RefreshChecklist();
+            if (currentPage == PSetup) RefreshChecklist();
             UpdateStats();
         }
 

@@ -96,6 +96,14 @@ namespace Ezpz
 
             args = Regex.Replace(args, @"-Xms\d+[kKmMgG]?", "-Xms" + S.MinRamGB + "g");
             args = Regex.Replace(args, @"-Xmx\d+[kKmMgG]?", "-Xmx" + S.MaxRamGB + "g");
+            // Java memory log for the Health page. JVM options must come before the main class.
+            if (args.IndexOf("-Xlog:gc", StringComparison.Ordinal) < 0)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(S.GcLogPath));
+                string gcArg = Util.QuoteArg("-Xlog:gc,gc+init:file=\"" + S.GcLogPath + "\":time,uptime,level,tags:filecount=5,filesize=20M");
+                int main = args.IndexOf("zombie.network.GameServer", StringComparison.Ordinal);
+                args = args.Substring(0, main) + gcArg + " " + args.Substring(main);
+            }
             args += " -servername " + Util.QuoteArg(S.ServerName);
             args += " " + Util.QuoteArg("-cachedir=" + S.DataDir);
             if (!string.IsNullOrEmpty(S.AdminPassword))
@@ -401,7 +409,7 @@ namespace Ezpz
             }
         }
 
-        static Task<int> RunAsync(string exe, string args, string wd, Action<string> log)
+        public static Task<int> RunAsync(string exe, string args, string wd, Action<string> log)
         {
             var tcs = new TaskCompletionSource<int>();
             var psi = new ProcessStartInfo(exe, args);

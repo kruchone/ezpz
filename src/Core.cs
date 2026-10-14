@@ -109,6 +109,8 @@ namespace Ezpz
         public string DbPath { get { return Path.Combine(DataDir, "db", ServerName + ".db"); } }
         public string LogsDir { get { return Path.Combine(DataDir, "Logs"); } }
         public string ConsoleLogPath { get { return Path.Combine(DataDir, "server-console.txt"); } }
+        // Kept outside Logs\ because PZ moves the Logs folder's files aside on every start.
+        public string GcLogPath { get { return Path.Combine(DataDir, "ezpz", "gc.log"); } }
         public string StartBat { get { return Path.Combine(InstallDir, "StartServer64.bat"); } }
         public string SteamCmdExe { get { return Path.Combine(SteamCmdDir, "steamcmd.exe"); } }
         public string AppManifest { get { return Path.Combine(InstallDir, "steamapps", "appmanifest_380870.acf"); } }

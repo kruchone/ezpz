@@ -69,7 +69,7 @@ namespace Ezpz
             var mods = Theme.Btn("Check mod updates");
             mods.Click += (s, e) => Cmd("checkModsNeedUpdate");
             var help = Theme.Btn("All commands");
-            help.Click += (s, e) => { Cmd("help"); ShowPage(2); };
+            help.Click += (s, e) => { Cmd("help"); ShowPage(PConsole); };
             bottom.Controls.AddRange(new Control[] { tbBroadcast, bc, mods, help });
             p.Controls.Add(bottom);
 
@@ -248,7 +248,7 @@ namespace Ezpz
 
         void PlayersTick()
         {
-            if (currentPage != 3 && currentPage != 4) return;
+            if (currentPage != PPlayers && currentPage != PWorld) return;
             if (server.State != ServerState.Running)
             {
                 if (onlineNow.Count > 0) { onlineNow.Clear(); RebuildPlayerList(); }
@@ -263,6 +263,7 @@ namespace Ezpz
             foreach (var raw in text.Split('\n'))
             {
                 string l = raw.TrimEnd('\r');
+                if (CollapseHarmless(l)) continue;
                 var ebs = GameData.EbsLine.Match(l);
                 if (ebs.Success) { ebsKhz = ebs.Groups[1].Value; ebsWhen = DateTime.Now; Ui(UpdateEbsLabel); }
                 bool isPlayerLine = l.Contains("Players connected") || PlayerLine.IsMatch(l);
@@ -272,8 +273,29 @@ namespace Ezpz
                     if (m.Success) lock (captured) captured.Add(m.Groups[1].Value.Trim());
                 }
                 if (DateTime.Now < quietUntil && isPlayerLine) continue;
+                if (CaptureStats(l)) continue;
                 Log(l);
             }
+        }
+
+        // B42 prints a full stack trace for every mod that has no animation folders. That is normal
+        // (most mods have none), so collapse each one into a single grey line.
+        bool collapsingTrace;
+        static readonly System.Text.RegularExpressions.Regex MissingModFolder =
+            new System.Text.RegularExpressions.Regex(@"NoSuchFileException: (.*?[\\/]mods[\\/][^\\/]+)[\\/].*?[\\/]media[\\/](\w+)");
+
+        bool CollapseHarmless(string l)
+        {
+            if (l.Contains("AdvancedAnimator$1.visitFileFailed")) { collapsingTrace = true; return true; }
+            if (!collapsingTrace) return false;
+            if (l.StartsWith("\t") || l.StartsWith(" "))
+            {
+                var m = MissingModFolder.Match(l);
+                if (m.Success) Log("[ezpz] (harmless) Mod " + System.IO.Path.GetFileName(m.Groups[1].Value) + " has no " + m.Groups[2].Value + " folder.");
+                return true;
+            }
+            collapsingTrace = false;
+            return false;
         }
 
         void RebuildPlayerList()

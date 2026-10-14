@@ -17,8 +17,10 @@ ezpz is a single `.exe` with no installer and no dependencies. It walks you thro
 ## Features
 
 - **Guided setup.** A checklist turns green as you go. It covers installing or updating the server through Valve's SteamCMD (anonymous login, `public` or `unstable` branch), creating the default config, adding the Windows Firewall rule, and showing your local and public IP.
-- **Configure.** Plain fields for the common settings (name, join password, max players, PvP, whitelist, ports, mods and so on), plus a searchable grid of every `.ini` setting. You can also import `.ini` and SandboxVars files made with the in-game Host menu.
+- **Configure.** Plain fields for the common settings (name, join password, max players, PvP, whitelist, ports and so on), plus a searchable grid of every `.ini` setting. You can also import `.ini` and SandboxVars files made with the in-game Host menu.
+- **Mods.** Paste Steam Workshop links, item numbers or a whole collection. ezpz looks the items up, downloads them with SteamCMD, reads each mod's real mod ID from its `mod.info`, and lets you tick which ones to load and in what order. It writes `WorkshopItems=`, `Mods=` and `Map=` in the Build 42 format, and warns about missing required mods, mods without a B42 version, and items with several mods to choose from.
 - **Console.** The live server console with command history, a clean stop that saves the world, auto-restart after a crash, and scheduled restarts that warn players in-game at 15, 5 and 1 minutes, with an optional update during the restart.
+- **Health.** Shows how much memory the world actually needs, measured by Java rather than Windows, on a chart against your max. Gives a plain verdict (looks right, tight, too small, or more than needed) with a concrete suggestion. Live tiles from PZ's built-in `stats` command show players, server FPS, zombies, loaded map cells, network traffic and today's kills and deaths. Also flags pauses waiting for memory, out-of-memory errors, Java crash reports and a max set too high for the PC, and shows CPU and PC memory.
 - **Players & Admin.** Everyone who has ever joined, with online status, role, last seen, Steam ID and IP. One click sets a role (admin, moderator, gm, observer, priority, user). Also: kick, ban (optionally including the IP), mute voice, reset a password, god mode, invisibility, no-clip, teleport, give items, XP or vehicles, spawn hordes, lightning, and broadcast messages.
 - **World & Weather.** Shows the world's Emergency Broadcast (EBS) radio frequency. Starts rain (with intensity), storms (with length), or clears the weather. Triggers lightning, thunder, helicopter and gunshot events.
 - **Backups.** One-click `.zip` backups of the world, accounts and config, with restore. Automatic backups on start, before a restore and before a reset.
@@ -68,9 +70,10 @@ All of these can be changed on the Setup page.
 
 - **Launching.** ezpz reads the server's own `StartServer64.bat` and runs its `java.exe` line directly, swapping in your memory settings and adding `-servername`, `-cachedir` and `-adminpassword`. Because ezpz owns the server's console, it can send commands and stop the server cleanly with `quit`.
 - **A server ezpz didn't start.** If ezpz finds such a server already running, it follows `server-console.txt` and sends commands over RCON. When you save on the Configure page, ezpz sets an RCON password if none exists.
+- **Health.** When ezpz starts the server it adds a Java memory log (`-Xlog:gc`, written to `<data folder>\ezpz\gc.log`, rotated at 5 × 20 MB). The memory figures, chart and verdict come from that log. Pauses where the game waited for memory ("allocation stalls") are the clearest sign the max is too small. The live tiles come from `stats <group> all` (groups: game, performance, network, connection), polled quietly every 10 seconds while the page is open.
+- **Mods.** Workshop items are downloaded with SteamCMD (anonymous login) into the server's own Workshop folder, the same place the server looks for them. Titles and collections come from Steam's public Web API. `Mods=` is written with a leading backslash on each ID (`Mods=\ModA;\ModB`), the format Build 42 servers accept. Whether each mod actually loaded is read from the server log.
 - **Player list.** Built from the server's `*_connections.txt` logs, which record role, Steam ID and IP, plus the `players` command for who is online now.
 - **EBS frequency.** Read from the server's startup log, where the game prints the channel it picked for the world.
-- **Weather.** The server doesn't report its live weather to outside tools. ezpz shows the last change you made, and the in-game forecast is on the EBS.
 
 ## Building from source
 
