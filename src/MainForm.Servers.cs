@@ -97,6 +97,7 @@ namespace Ezpz
             sandbox = null;
             dcLoaded = false;
             feed.Reset();
+            chars = new Dictionary<string, CharacterSheet>(StringComparer.OrdinalIgnoreCase); traffic = null; trafficAt = DateTime.MinValue;
             playersBaseline = false; notifiedBuild = null; healthNotifiedRun = DateTime.MinValue; lastNotifiedState = ServerState.Stopped;
             modsOutdated = new List<string>(); modsMissing = new List<string>();
             lastModCheck = DateTime.MinValue; modRestartAt = null; modRestartWhenEmpty = false; modCheckError = null;

@@ -18,6 +18,123 @@ namespace Ezpz
         public DateTime LastSeen = DateTime.MinValue;
     }
 
+    public class LevelUp { public DateTime When; public string Perk; public int Level; }
+
+    // One player's current character, rebuilt from the server's *_PerkLog.txt files:
+    //   [time] [steamid][name][x,y,z][Login][Hours Survived: N].
+    //   [time] [steamid][name][x,y,z][Perk=level, Perk=level, ...][Hours Survived: N].   (snapshot at login)
+    //   [time] [steamid][name][x,y,z][Level Changed][Perk][level][Hours Survived: N].
+    // Hours Survived going back down means a new character (the previous one died).
+    public class CharacterSheet
+    {
+        public string Name, SteamId = "", Position = "";
+        public int HoursSurvived, Characters = 1;
+        public DateTime LastSeen = DateTime.MinValue, CharacterSince = DateTime.MinValue;
+        public readonly Dictionary<string, int> Skills = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        public readonly List<LevelUp> LevelUps = new List<LevelUp>();   // this character's, oldest first
+    }
+
+    public static class Characters
+    {
+        static readonly Regex Bracket = new Regex(@"\[([^\]]*)\]");
+        static readonly Regex Hours = new Regex(@"Hours Survived:\s*(\d+)");
+
+        // Skill groups as the game's Skills panel shows them (translation keys for the group names).
+        public static readonly KeyValuePair<string, string[]>[] Groups =
+        {
+            new KeyValuePair<string, string[]>("PhysicalCategory", new[] { "Fitness", "Strength", "Sprinting", "Lightfoot", "Nimble", "Sneak" }),
+            new KeyValuePair<string, string[]>("CombatMelee", new[] { "Axe", "Blunt", "SmallBlunt", "LongBlade", "SmallBlade", "Spear", "Maintenance" }),
+            new KeyValuePair<string, string[]>("CombatFirearms", new[] { "Aiming", "Reloading" }),
+            new KeyValuePair<string, string[]>("Crafting", new[] { "Woodwork", "Cooking", "Doctor", "Electricity", "MetalWelding", "Mechanics", "Tailoring", "Blacksmith", "Pottery", "Masonry", "Carving", "Glassmaking", "FlintKnapping" }),
+            new KeyValuePair<string, string[]>("FarmingCategory", new[] { "Farming", "Husbandry", "Butchering" }),
+            new KeyValuePair<string, string[]>("Survivalist", new[] { "Fishing", "Trapping", "PlantScavenging", "Tracking" }),
+        };
+
+        // Code names whose translation key is spelled differently.
+        static readonly Dictionary<string, string> Alias = new Dictionary<string, string> { { "Lightfoot", "Lightfooted" }, { "Sneak", "Sneaking" }, { "PlantScavenging", "Foraging" } };
+
+        public static Dictionary<string, string> LoadNames(string installDir)
+        {
+            var d = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                string f = Path.Combine(installDir, "media", "lua", "shared", "Translate", "EN", "IG_UI.json");
+                if (File.Exists(f))
+                    foreach (Match m in Regex.Matches(File.ReadAllText(f), "\"IGUI_perks_([A-Za-z]+)\"\\s*:\\s*\"([^\"]*)\""))
+                        d[m.Groups[1].Value] = m.Groups[2].Value;
+            }
+            catch { }
+            return d;
+        }
+
+        public static string Name(Dictionary<string, string> names, string key)
+        {
+            string v, alias;
+            if (names.TryGetValue(key, out v)) return v;
+            if (Alias.TryGetValue(key, out alias) && names.TryGetValue(alias, out v)) return v;
+            return Regex.Replace(key, @"(?<=[a-z])(?=[A-Z])", " ");
+        }
+
+        public static Dictionary<string, CharacterSheet> Read(AppSettings s)
+        {
+            var d = new Dictionary<string, CharacterSheet>(StringComparer.OrdinalIgnoreCase);
+            if (!Directory.Exists(s.LogsDir)) return d;
+            var files = Directory.GetFiles(s.LogsDir, "*_PerkLog.txt", SearchOption.AllDirectories).OrderBy(f => File.GetLastWriteTime(f));
+            foreach (var f in files)
+            {
+                string text;
+                try { text = GameData.ReadShared(f); } catch { continue; }
+                foreach (var line in text.Split('\n'))
+                {
+                    var b = Bracket.Matches(line).Cast<Match>().Select(m => m.Groups[1].Value).ToList();
+                    if (b.Count < 6) continue;
+                    DateTime t;
+                    if (!DateTime.TryParseExact(b[0].Length >= 17 ? b[0].Substring(0, 17) : b[0], "dd-MM-yy HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out t)) continue;
+                    string name = b[2];
+                    if (name == "" || name == "null") continue;
+                    var hm = Hours.Match(b[b.Count - 1]);
+                    int hours = hm.Success ? int.Parse(hm.Groups[1].Value) : -1;
+
+                    CharacterSheet c;
+                    if (!d.TryGetValue(name, out c)) { c = new CharacterSheet { Name = name, CharacterSince = t }; d[name] = c; }
+                    if (hours >= 0 && hours + 1 < c.HoursSurvived)
+                    {
+                        // a new character: the old one died (or was reset)
+                        c.Characters++;
+                        c.CharacterSince = t;
+                        c.Skills.Clear();
+                        c.LevelUps.Clear();
+                    }
+                    if (hours >= 0) c.HoursSurvived = hours;
+                    if (b[1] != "" && b[1] != "0") c.SteamId = b[1];
+                    c.Position = b[3];
+                    if (t > c.LastSeen) c.LastSeen = t;
+
+                    string kind = b[4];
+                    if (kind.Contains("="))
+                    {
+                        foreach (var part in kind.Split(','))
+                        {
+                            var kv = part.Split('=');
+                            int lv;
+                            if (kv.Length == 2 && int.TryParse(kv[1].Trim(), out lv)) c.Skills[kv[0].Trim()] = lv;
+                        }
+                    }
+                    else if (kind == "Level Changed" && b.Count >= 8)
+                    {
+                        int lv;
+                        if (int.TryParse(b[6], out lv))
+                        {
+                            c.Skills[b[5]] = lv;
+                            c.LevelUps.Add(new LevelUp { When = t, Perk = b[5], Level = lv });
+                        }
+                    }
+                }
+            }
+            return d;
+        }
+    }
+
     // Follows the current run's *_connections.txt to know who is online without sending console commands.
     // Join: event="fully-connected". Leave: event="disconnect", or a RakNet disconnection/connection-lost line
     // that only carries the session guid (mapped back to the name from the join).

@@ -54,6 +54,7 @@ namespace Ezpz
                 if (hit.Item != null) hit.Item.Selected = true;
             };
             p.Controls.Add(lvPlayers);
+            p.Controls.Add(BuildSheet());   // character sheet under the list
 
             // --- per-player action panel (added before the bottom row so the bottom row spans the full width)
             p.Controls.Add(BuildPlayerActions());
@@ -223,6 +224,7 @@ namespace Ezpz
             if (readLogs || (DateTime.Now - lastLogRead).TotalSeconds > 60)
             {
                 lastLogRead = DateTime.Now;
+                LoadCharacters();
                 Task.Run(() => GameData.ReadRoster(S)).ContinueWith(t =>
                 {
                     if (t.Exception == null) Ui(() => { roster = t.Result; RebuildPlayerList(); });
@@ -276,6 +278,7 @@ namespace Ezpz
             }
             if ((DateTime.Now - lastPoll).TotalMinutes >= 5 && (DateTime.Now - server.StartedAt).TotalMinutes >= 2) PollOnline();
             if ((currentPage == PPlayers) && (DateTime.Now - lastLogRead).TotalSeconds > 60) RefreshPlayers(true);
+            if (currentPage == PPlayers) SheetTick();
         }
 
         // All server output comes through here: hide the manager's own polling, pick up facts, then log.
@@ -378,6 +381,7 @@ namespace Ezpz
 
         void OnPlayerSelected()
         {
+            UpdateSheet();
             if (lblSel == null) return;
             string n = Sel;
             if (n == null) { lblSel.Text = "Select a player on the left"; lblSel.ForeColor = Theme.Muted; return; }

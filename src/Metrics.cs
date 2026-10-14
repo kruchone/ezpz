@@ -41,6 +41,39 @@ namespace Ezpz
             return list;
         }
 
+        public class Traffic
+        {
+            public double SentBytes, ReceivedBytes, SentPackets, ReceivedPackets;
+            public readonly Dictionary<string, double> SentByType = new Dictionary<string, double>();
+        }
+
+        // Per-player network traffic since the server started: packet_send/receive_bytes are labelled with
+        // the player's username ("client") and the packet type.
+        public static Dictionary<string, Traffic> PlayerTraffic(List<Sample> samples)
+        {
+            var d = new Dictionary<string, Traffic>(StringComparer.OrdinalIgnoreCase);
+            foreach (var s in samples)
+            {
+                string client;
+                if (!s.Labels.TryGetValue("client", out client) || client == "") continue;
+                Traffic t;
+                if (!d.TryGetValue(client, out t)) { t = new Traffic(); d[client] = t; }
+                string type;
+                s.Labels.TryGetValue("packetType", out type);
+                switch (s.Name)
+                {
+                    case "packet_send_bytes_sum":
+                        t.SentBytes += s.Value;
+                        if (type != null) t.SentByType[type] = (t.SentByType.ContainsKey(type) ? t.SentByType[type] : 0) + s.Value;
+                        break;
+                    case "packet_receive_bytes_sum": t.ReceivedBytes += s.Value; break;
+                    case "packet_send_bytes_count": t.SentPackets += s.Value; break;
+                    case "packet_receive_bytes_count": t.ReceivedPackets += s.Value; break;
+                }
+            }
+            return d;
+        }
+
         // Flattens into the same keys the "stats <group> all" command uses (e.g. "players", "fps"),
         // plus a few Java ones prefixed "jvm:".
         public static Dictionary<string, double> ToStats(List<Sample> samples)
