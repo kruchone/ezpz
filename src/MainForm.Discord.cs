@@ -60,8 +60,8 @@ namespace Ezpz
             p.Hint("Optional. Server events such as joins and deaths.");
             tbDcCmd = p.Row("Command channel name", Theme.Box(""), 240);
             p.Hint("Optional. Admins can type server commands here. Keep it private.");
-            var saveBot = Theme.Btn("Save to server config", Theme.AccentBtn);
-            saveBot.Click += (s, e) => SaveDiscordBot();
+            var saveBot = Theme.Btn("Save", Theme.AccentBtn);
+            saveBot.Click += (s, e) => SaveDiscordAll();
             var check = Theme.Btn("Check setup");
             check.Click += async (s, e) => await CheckDiscordBot();
             p.Buttons(saveBot, check);
@@ -93,7 +93,7 @@ namespace Ezpz
             }
             p.Y += 6;
             var saveHook = Theme.Btn("Save", Theme.AccentBtn);
-            saveHook.Click += (s, e) => SaveWebhook();
+            saveHook.Click += (s, e) => SaveDiscordAll();
             var test = Theme.Btn("Send test message");
             test.Click += async (s, e) => await TestWebhook();
             p.Buttons(saveHook, test);
@@ -126,8 +126,11 @@ namespace Ezpz
 
         // ---------- load / save
 
+        bool dcLoaded;
+
         void RefreshDiscord()
         {
+            dcLoaded = true;
             var ini = IniFile.Load(S.IniPath);
             chkDcEnable.Checked = ini.Get("DiscordEnable", "false").Trim().Equals("true", StringComparison.OrdinalIgnoreCase);
             tbDcToken.Text = ini.Get("DiscordToken", "");
@@ -146,13 +149,57 @@ namespace Ezpz
             lblWebhookState.Text = S.DiscordWebhook == "" ? "Not set up." : "Set up. Posting " + dcEventChecks.Count(kv => kv.Value.Checked) + " kinds of events.";
         }
 
-        void SaveDiscordBot()
+        // True if anything on the page differs from what's saved (server .ini for the bridge, ezpz settings for the webhook).
+        bool DiscordDirty()
         {
-            if (!System.IO.File.Exists(S.IniPath)) { Warn("There's no server config yet. Click 'Generate default config' on the Setup page first."); return; }
+            if (!dcLoaded) return false;
+            var ini = IniFile.Load(S.IniPath);
+            bool en = ini.Get("DiscordEnable", "false").Trim().Equals("true", StringComparison.OrdinalIgnoreCase);
+            if (System.IO.File.Exists(S.IniPath) && (chkDcEnable.Checked != en
+                || tbDcToken.Text.Trim() != ini.Get("DiscordToken", "").Trim()
+                || tbDcChat.Text.Trim().TrimStart('#') != ini.Get("DiscordChatChannel", "").Trim()
+                || tbDcLog.Text.Trim().TrimStart('#') != ini.Get("DiscordLogChannel", "").Trim()
+                || tbDcCmd.Text.Trim().TrimStart('#') != ini.Get("DiscordCommandChannel", "").Trim())) return true;
+            if (tbWebhook.Text.Trim() != S.DiscordWebhook) return true;
+            int mask = 0;
+            foreach (var kv in dcEventChecks) if (kv.Value.Checked) mask |= (int)kv.Key;
+            return mask != S.DiscordEvents;
+        }
+
+        // One Save for the whole page: both the chat bridge and the notifications.
+        bool SaveDiscordAll()
+        {
+            string url;
+            if (!ReadWebhookForm(out url)) return false;
+            bool bridgeChanged = false;
+            if (System.IO.File.Exists(S.IniPath))
+            {
+                var before = IniFile.Load(S.IniPath);
+                bridgeChanged = !before.Get("DiscordEnable", "").Trim().Equals(chkDcEnable.Checked ? "true" : "false", StringComparison.OrdinalIgnoreCase)
+                    || before.Get("DiscordToken", "").Trim() != tbDcToken.Text.Trim()
+                    || before.Get("DiscordChatChannel", "").Trim() != tbDcChat.Text.Trim().TrimStart('#')
+                    || before.Get("DiscordLogChannel", "").Trim() != tbDcLog.Text.Trim().TrimStart('#')
+                    || before.Get("DiscordCommandChannel", "").Trim() != tbDcCmd.Text.Trim().TrimStart('#');
+                if (bridgeChanged && !SaveDiscordBot(false)) return false;
+            }
+            else if (chkDcEnable.Checked) { Warn("There's no server config yet. Click 'Generate default config' on the Setup page first."); return false; }
+            SaveWebhook();
+            lblWebhookState.Text = "Saved.";
+            lblWebhookState.ForeColor = Theme.Accent;
+            if (bridgeChanged && server.State == ServerState.Running && Confirm("Saved. The game connects to Discord when the server starts. Restart it now?"))
+            {
+                var _ = RestartFlow(false);
+            }
+            return true;
+        }
+
+        bool SaveDiscordBot(bool askRestart)
+        {
+            if (!System.IO.File.Exists(S.IniPath)) { Warn("There's no server config yet. Click 'Generate default config' on the Setup page first."); return false; }
             if (chkDcEnable.Checked && (tbDcToken.Text.Trim() == "" || tbDcChat.Text.Trim() == ""))
             {
                 Warn("The chat bridge needs at least a bot token and a chat channel name.");
-                return;
+                return false;
             }
             var ini = IniFile.Load(S.IniPath);
             ini.Set("DiscordEnable", chkDcEnable.Checked ? "true" : "false");
@@ -162,10 +209,11 @@ namespace Ezpz
             ini.Set("DiscordCommandChannel", tbDcCmd.Text.Trim().TrimStart('#'));
             ini.Save();
             Log("[ezpz] Saved Discord chat bridge settings (" + (chkDcEnable.Checked ? "on" : "off") + ").");
-            if (server.State == ServerState.Running && Confirm("Saved. The game connects to Discord when the server starts. Restart it now?"))
+            if (askRestart && server.State == ServerState.Running && Confirm("Saved. The game connects to Discord when the server starts. Restart it now?"))
             {
                 var _ = RestartFlow(false);
             }
+            return true;
         }
 
         async Task CheckDiscordBot()

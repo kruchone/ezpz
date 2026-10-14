@@ -53,6 +53,7 @@ namespace Ezpz
         {
             if (id.Equals(S.ProfileId, StringComparison.OrdinalIgnoreCase)) return;
             if (busy != null) { Warn("Please wait: " + busy); return; }
+            if (!LeaveCheck()) return;
             if (modsDirty && !Confirm("You have unsaved changes on the Mods page. Discard them and switch servers?")) return;
             if (SandboxDirty && !Confirm("You have unsaved changes on the Sandbox page. Discard them and switch servers?")) return;
             if (server.State != ServerState.Stopped)
@@ -94,6 +95,7 @@ namespace Ezpz
             restartWarned.Clear();
             serverCpuPct = -1; lastCpuAt = DateTime.MinValue;
             sandbox = null;
+            dcLoaded = false;
             playersBaseline = false; notifiedBuild = null; healthNotifiedRun = DateTime.MinValue; lastNotifiedState = ServerState.Stopped;
             modsOutdated = new List<string>(); modsMissing = new List<string>();
             lastModCheck = DateTime.MinValue; modRestartAt = null; modRestartWhenEmpty = false; modCheckError = null;

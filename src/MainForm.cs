@@ -166,6 +166,7 @@ namespace Ezpz
         int currentPage = -1;
         void ShowPage(int i)
         {
+            if (i != currentPage && !LeaveCheck()) return;
             currentPage = i;
             Control[] all = { pgHome, pgSetup, pgConfig, pgSandbox, pgMods, pgConsole, pgPlayers, pgWorld, pgDiscord, pgBackups, pgReset };
             for (int k = 0; k < all.Length; k++)
@@ -562,7 +563,43 @@ namespace Ezpz
                                    || Convert.ToString(r.Cells[1].Value).IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        void SaveConfig()
+        // True if what's on the Configure page differs from the file.
+        bool ConfigDirty()
+        {
+            if (grid == null || !File.Exists(S.IniPath)) return false;
+            grid.EndEdit();
+            foreach (DataGridViewRow r in grid.Rows)
+                if (Convert.ToString(r.Cells[1].Value) != Convert.ToString(r.Tag)) return true;
+            foreach (var f in Fields)
+            {
+                var c = cfgCtl[f.Key];
+                var cb = c as CheckBox;
+                string v = cb != null ? (cb.Checked ? "true" : "false") : c.Text.Trim();
+                string old = Convert.ToString(c.Tag);
+                bool same = cb != null ? old.Trim().Equals(v, StringComparison.OrdinalIgnoreCase) || (old == "" && !cb.Checked) : old == v;
+                if (!same) return true;
+            }
+            return false;
+        }
+
+        // Before leaving a page (or the server, or the app): offer to save edits instead of silently dropping them.
+        bool LeaveCheck()
+        {
+            if (currentPage == PDiscord && DiscordDirty()) return AskSave("Discord settings", SaveDiscordAll, RefreshDiscord);
+            if (currentPage == PConfig && ConfigDirty()) return AskSave("server settings", SaveConfig, LoadConfig);
+            return true;
+        }
+
+        bool AskSave(string what, Func<bool> save, Action discard)
+        {
+            var r = MessageBox.Show(this, "You have unsaved " + what + " on this page. Save them?", "Unsaved changes", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+            if (r == DialogResult.Cancel) return false;
+            if (r == DialogResult.Yes) return save();
+            discard();
+            return true;
+        }
+
+        bool SaveConfig()
         {
             grid.EndEdit();
             var ini = IniFile.Load(S.IniPath);
@@ -580,7 +617,7 @@ namespace Ezpz
                 string old = Convert.ToString(c.Tag);
                 bool same = cb != null ? old.Trim().Equals(v, StringComparison.OrdinalIgnoreCase) || (old == "" && !cb.Checked) : old == v;
                 if (same) continue;
-                if (f.Kind == "int") { int n; if (!int.TryParse(v, out n)) { Warn(f.Label + " must be a whole number."); return; } }
+                if (f.Kind == "int") { int n; if (!int.TryParse(v, out n)) { Warn(f.Label + " must be a whole number."); return false; } }
                 ini.Set(f.Key, v);
                 changes++;
             }
@@ -595,6 +632,7 @@ namespace Ezpz
             Log("[ezpz] Saved " + changes + " change(s) to " + S.IniPath + (server.State != ServerState.Stopped ? "  (restart or 'Apply live' to take effect)" : ""));
             LoadConfig();
             RefreshChecklist();
+            return true;
         }
 
         void EditFile(string path)
@@ -1182,6 +1220,7 @@ namespace Ezpz
 
         async void OnClosingForm(object sender, FormClosingEventArgs e)
         {
+            if (!closingConfirmed && !LeaveCheck()) { e.Cancel = true; return; }
             if (closingConfirmed || !server.Attached) return;
             e.Cancel = true;
             var r = MessageBox.Show(this, "The server is still running and needs the manager open.\n\nStop the server (saving the world) and exit?", "Exit", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);
