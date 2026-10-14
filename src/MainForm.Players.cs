@@ -171,6 +171,8 @@ namespace Ezpz
             nHorde.Width = 60; nHorde.Margin = new Padding(0, 4, 6, 6);
             Line(f, nHorde, Btn("Spawn horde", (s, e) => { if (ConfirmSel("Spawn " + nHorde.Value + " zombies next to {0}?")) PCmd("createhorde " + nHorde.Value + " \"{0}\""); }));
             Line(f, Btn("Lightning strike", (s, e) => PCmd("lightning \"{0}\"")), Btn("Thunder", (s, e) => PCmd("thunder \"{0}\"")));
+            // a scrolling panel ignores its bottom padding, which clipped this last row; leave room after it
+            f.Controls.Add(new Panel { Size = new Size(1, 20), Margin = new Padding(0), BackColor = Color.Transparent });
 
             OnPlayerSelected();
             return host;
