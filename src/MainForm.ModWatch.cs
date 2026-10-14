@@ -121,6 +121,9 @@ namespace Ezpz
         {
             string names = string.Join(", ", modsOutdated.Select(TitleOf));
             Log("[ezpz] Mod update available on the Workshop: " + names);
+            string plan = server.State != ServerState.Running || S.ModUpdateAction == 0 ? "The server needs a restart to install it."
+                : S.ModUpdateAction == 1 ? "Restarting in 5 minutes to install it." : "It'll restart to install it as soon as nobody is online.";
+            Notify(DiscordEvent.Updates, "🧩 Mod update for " + ServerTitle(), names + "\n" + plan, DcAmber);
             if (server.State != ServerState.Running) return;
             switch (S.ModUpdateAction)
             {

@@ -241,7 +241,9 @@ namespace Ezpz
             Task.Delay(1500).ContinueWith(t => Ui(() =>
             {
                 pollPending = false;
+                var before = onlineNow;
                 lock (captured) onlineNow = new HashSet<string>(captured, StringComparer.OrdinalIgnoreCase);
+                DiscordPlayersChanged(before, onlineNow);
                 RebuildPlayerList();
             }));
         }

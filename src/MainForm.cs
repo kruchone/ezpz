@@ -73,6 +73,7 @@ namespace Ezpz
             BuildHome();
             BuildPlayers();
             BuildWorld();
+            BuildDiscord();
             BuildBackups();
             BuildReset();
             BuildNav();
@@ -136,7 +137,7 @@ namespace Ezpz
 
         void BuildNav()
         {
-            string[] names = { "Home", "Setup", "Configure", "Sandbox", "Mods", "Console", "Players & Admin", "World & Weather", "Backups", "Reset" };
+            string[] names = { "Home", "Setup", "Configure", "Sandbox", "Mods", "Console", "Players & Admin", "World & Weather", "Discord", "Backups", "Reset" };
             int y = 14;
             for (int i = 0; i < names.Length; i++)
             {
@@ -144,14 +145,14 @@ namespace Ezpz
                 var b = new Button
                 {
                     Text = (i == PHome ? "⌂   " : i + "   ") + names[i], FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
-                    Size = new Size(200, 40), Location = new Point(10, y), ForeColor = Theme.Text, Font = Theme.Bold,
+                    Size = new Size(200, 36), Location = new Point(10, y), ForeColor = Theme.Text, Font = Theme.Bold,
                     BackColor = Theme.Side, Cursor = Cursors.Hand, Padding = new Padding(8, 0, 0, 0)
                 };
                 b.FlatAppearance.BorderSize = 0;
                 b.Click += (s, e) => ShowPage(idx);
                 nav.Controls.Add(b);
                 navButtons.Add(b);
-                y += i == PHome ? 54 : 44;
+                y += i == PHome ? 48 : 39;
             }
             navButtons[PReset].ForeColor = Theme.Danger;
             lblNavData = new Label { Text = "Data:\n" + S.DataDir, ForeColor = Theme.Muted, AutoSize = true, MaximumSize = new Size(200, 0), Location = new Point(14, y + 20) };
@@ -159,14 +160,14 @@ namespace Ezpz
         }
 
         // Page numbers, in nav order.
-        const int PHome = 0, PSetup = 1, PConfig = 2, PSandbox = 3, PMods = 4, PConsole = 5, PPlayers = 6, PWorld = 7, PBackups = 8, PReset = 9;
+        const int PHome = 0, PSetup = 1, PConfig = 2, PSandbox = 3, PMods = 4, PConsole = 5, PPlayers = 6, PWorld = 7, PDiscord = 8, PBackups = 9, PReset = 10;
 
         public int StartPage;
         int currentPage = -1;
         void ShowPage(int i)
         {
             currentPage = i;
-            Control[] all = { pgHome, pgSetup, pgConfig, pgSandbox, pgMods, pgConsole, pgPlayers, pgWorld, pgBackups, pgReset };
+            Control[] all = { pgHome, pgSetup, pgConfig, pgSandbox, pgMods, pgConsole, pgPlayers, pgWorld, pgDiscord, pgBackups, pgReset };
             for (int k = 0; k < all.Length; k++)
             {
                 all[k].Visible = k == i;
@@ -179,6 +180,7 @@ namespace Ezpz
             if (i == PHome) RefreshHome();
             if (i == PPlayers) RefreshPlayers(true);
             if (i == PWorld) RefreshWorld();
+            if (i == PDiscord) RefreshDiscord();
             if (i == PBackups) RefreshBackupList();
             if (i == PReset) UpdateResetPreview();
         }
@@ -1055,15 +1057,23 @@ namespace Ezpz
 
         void OnCrash()
         {
-            if (!S.AutoRestart) { Log("[ezpz] Server stopped unexpectedly. Auto-restart is off."); return; }
+            lastCrashAt = DateTime.Now;
+            if (!S.AutoRestart)
+            {
+                Log("[ezpz] Server stopped unexpectedly. Auto-restart is off.");
+                Notify(DiscordEvent.Crash, "💥 " + ServerTitle() + " crashed", "Auto-restart is off, so it stays down until someone starts it.", DcRed);
+                return;
+            }
             crashTimes.Add(DateTime.Now);
             crashTimes.RemoveAll(t => t < DateTime.Now.AddMinutes(-10));
             if (crashTimes.Count >= 3)
             {
                 Log("[ezpz] Server crashed 3 times in 10 minutes. Auto-restart paused. Check the console and logs for the cause.");
+                Notify(DiscordEvent.Crash, "💥 " + ServerTitle() + " keeps crashing", "3 crashes in 10 minutes, so automatic restarts are paused. An admin needs to check the server.", DcRed);
                 return;
             }
             Log("[ezpz] Server stopped unexpectedly. Restarting in 15 seconds...");
+            Notify(DiscordEvent.Crash, "💥 " + ServerTitle() + " crashed", "Restarting automatically in 15 seconds.", DcAmber);
             Task.Delay(15000).ContinueWith(t => Ui(async () =>
             {
                 if (server.State == ServerState.Stopped) await StartFlow();
@@ -1088,6 +1098,7 @@ namespace Ezpz
             UpdateStats();
             PlayersTick();
             ModWatchTick();
+            DiscordTick();
             if (currentPage == PHome && ticks % 3 == 0) RefreshHome();
 
             // scheduled restarts with in-game warnings
@@ -1097,7 +1108,11 @@ namespace Ezpz
                 foreach (int m in new[] { 15, 5, 1 })
                 {
                     if (left.TotalMinutes <= m && left.TotalMinutes > m - 1 && restartWarned.Add(m))
+                    {
                         Cmd("servermsg \"Scheduled server restart in " + m + " minute" + (m == 1 ? "" : "s") + ". Find somewhere safe!\"");
+                        if (restartWarned.Count == 1)
+                            Notify(DiscordEvent.RestartWarning, "🔁 " + ServerTitle() + " restarts in " + m + " minute" + (m == 1 ? "" : "s"), "Scheduled restart. It'll be back in a couple of minutes.", DcAmber);
+                    }
                 }
                 if (left.TotalSeconds <= 0 && restartWarned.Add(0))
                 {
@@ -1138,6 +1153,7 @@ namespace Ezpz
             var st = server.State;
             lblStatus.Text = "● " + StateText();
             UpdateTitle();
+            DiscordOnState(st);
             if (currentPage == PHome) RefreshHome();
             lblStatus.ForeColor = st == ServerState.Running ? Theme.Accent : st == ServerState.Stopped ? Theme.Muted : Theme.Warn;
             btnStart.Enabled = st == ServerState.Stopped;

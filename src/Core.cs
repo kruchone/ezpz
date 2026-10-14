@@ -30,6 +30,8 @@ namespace Ezpz
         public int KeepAutoBackups = 10;
         public int ModUpdateAction = 1;    // 0 = just tell me, 1 = restart after a 5-minute warning, 2 = restart when nobody is online
         public int ModCheckMinutes = 10;
+        public string DiscordWebhookProtected = "";   // encrypted like the admin password
+        public int DiscordEvents = 0x7F;               // DiscordEvent flags to post
 
         // Which profile file this is (a property, so it isn't written into the file).
         public string ProfileId { get; set; }
@@ -192,6 +194,25 @@ namespace Ezpz
                 var b = ProtectedData.Protect(Encoding.UTF8.GetBytes(value), null, DataProtectionScope.CurrentUser);
                 AdminPasswordProtected = Convert.ToBase64String(b);
             }
+        }
+
+        public string DiscordWebhook
+        {
+            get { return Unprotect(DiscordWebhookProtected); }
+            set { DiscordWebhookProtected = Protect(value); }
+        }
+
+        static string Protect(string v)
+        {
+            if (string.IsNullOrEmpty(v)) return "";
+            return Convert.ToBase64String(ProtectedData.Protect(Encoding.UTF8.GetBytes(v), null, DataProtectionScope.CurrentUser));
+        }
+
+        static string Unprotect(string v)
+        {
+            if (string.IsNullOrEmpty(v)) return "";
+            try { return Encoding.UTF8.GetString(ProtectedData.Unprotect(Convert.FromBase64String(v), null, DataProtectionScope.CurrentUser)); }
+            catch { return ""; }
         }
 
         // ---- Derived paths (PZ layout inside -cachedir) ----

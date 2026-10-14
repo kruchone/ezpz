@@ -265,6 +265,12 @@ namespace Ezpz
             {
                 latestBuild = await SteamCmd.LatestBuildId(S, l => { });
                 if (latestBuild == null) updateError = "Steam didn't return build information. Try again later.";
+                string have = SteamCmd.InstalledBuildId(S);
+                if (latestBuild != null && have != null && latestBuild != have && notifiedBuild != latestBuild)
+                {
+                    notifiedBuild = latestBuild;
+                    Notify(DiscordEvent.Updates, "⬆️ Game update for " + ServerTitle(), "Steam has a new server build (" + latestBuild + "). Players who update their game can't join until the server is updated too.", DcAmber);
+                }
             }
             catch (Exception ex) { updateError = ex.Message; }
             finally
@@ -303,6 +309,7 @@ namespace Ezpz
             {
                 if (!Confirm("Updating needs the server stopped. Stop it (saving the world), update, and start it again?")) return;
                 try { server.SendCommand("servermsg \"Server is restarting for an update.\"", false); } catch { }
+                Notify(DiscordEvent.RestartWarning, "🔁 " + ServerTitle() + " is updating", "Installing a game update. It'll be back in a few minutes.", DcAmber);
                 await StopFlow();
                 if (server.State != ServerState.Stopped) return;
             }

@@ -94,6 +94,7 @@ namespace Ezpz
             restartWarned.Clear();
             serverCpuPct = -1; lastCpuAt = DateTime.MinValue;
             sandbox = null;
+            playersBaseline = false; notifiedBuild = null; healthNotifiedRun = DateTime.MinValue; lastNotifiedState = ServerState.Stopped;
             modsOutdated = new List<string>(); modsMissing = new List<string>();
             lastModCheck = DateTime.MinValue; modRestartAt = null; modRestartWhenEmpty = false; modCheckError = null;
         }
@@ -116,6 +117,7 @@ namespace Ezpz
             chkBackupOnStart.Checked = S.BackupOnStart;
             numKeepBackups.Value = Math.Max(numKeepBackups.Minimum, Math.Min(numKeepBackups.Maximum, S.KeepAutoBackups));
             cbModAction.SelectedIndex = Math.Max(0, Math.Min(2, S.ModUpdateAction));
+            LoadDiscordControls();
         }
 
         // ---------- add / remove

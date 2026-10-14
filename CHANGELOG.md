@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- New Discord page: guided setup of the game's built-in chat bridge bot, with a setup check (token, server, channel names, Message Content Intent), plus ezpz notifications through a webhook (online, stopped, crashes, restart warnings, updates, players joining and leaving, memory problems).
 - New Sandbox page: a form for every world rule, built from the server's own SandboxVars file, with search, a changed-from-default filter and reset-to-default. It edits values in place, keeps a .bak copy, and falls back to Notepad if the file looks unfamiliar.
 - Mod update watcher: while the server runs, ezpz checks the Workshop for mod updates and can restart after a 5-minute in-game warning, or when nobody is online. Home and the Mods page show mod update status.
 - Fixed: opening the Mods page could mark it as changed and move ticked mods to the end of the load order.
