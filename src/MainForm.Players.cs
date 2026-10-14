@@ -54,6 +54,7 @@ namespace Ezpz
                 if (hit.Item != null) hit.Item.Selected = true;
             };
             p.Controls.Add(lvPlayers);
+            p.Controls.Add(BuildSheet());   // character sheet under the list
 
             // --- per-player action panel (added before the bottom row so the bottom row spans the full width)
             p.Controls.Add(BuildPlayerActions());
@@ -69,15 +70,16 @@ namespace Ezpz
             var mods = Theme.Btn("Check mod updates");
             mods.Click += (s, e) => Cmd("checkModsNeedUpdate");
             var help = Theme.Btn("All commands");
-            help.Click += (s, e) => { Cmd("help"); ShowPage(2); };
+            help.Click += (s, e) => { Cmd("help"); ShowPage(PConsole); };
             bottom.Controls.AddRange(new Control[] { tbBroadcast, bc, mods, help });
             p.Controls.Add(bottom);
 
             // --- toolbar + title
             var top = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 46, WrapContents = false };
             var refresh = Theme.Btn("Refresh", Theme.AccentBtn);
-            refresh.Click += (s, e) => RefreshPlayers(true);
+            refresh.Click += (s, e) => { PollOnline(); RefreshPlayers(true); };
             chkAutoPlayers = Theme.Check("Auto-refresh", true);
+            chkAutoPlayers.Visible = false;   // the list now updates live from the server's connection log
             chkAutoPlayers.Margin = new Padding(8, 8, 8, 0);
             chkShowOffline = Theme.Check("Show offline players", true);
             chkShowOffline.Margin = new Padding(8, 8, 8, 0);
@@ -112,7 +114,8 @@ namespace Ezpz
             Section(f, "Moderation");
             Line(f, Btn("Kick…", (s, e) => Kick()), Btn("Ban…", (s, e) => Ban(false)), Btn("Ban + IP…", (s, e) => Ban(true)), Btn("Unban", (s, e) => PCmd("unbanuser \"{0}\"")));
             Line(f, Btn("Mute voice", (s, e) => PCmd("voiceban \"{0}\" -true")), Btn("Unmute voice", (s, e) => PCmd("voiceban \"{0}\" -false")));
-            Line(f, Btn("Set password…", (s, e) => SetPassword()), Btn("Remove from whitelist", (s, e) => { if (ConfirmSel("Remove {0} from the whitelist? They won't be able to log in on a whitelist-only server.")) PCmd("removeuserfromwhitelist \"{0}\""); }));
+            Line(f, Btn("View logs", (s, e) => { if (NeedSel()) ShowLogsFor(Sel); }), Btn("Set password…", (s, e) => SetPassword()));
+            Line(f, Btn("Remove from whitelist", (s, e) => { if (ConfirmSel("Remove {0} from the whitelist? They won't be able to log in on a whitelist-only server.")) PCmd("removeuserfromwhitelist \"{0}\""); }));
 
             Section(f, "Admin powers");
             Line(f, Lbl("God mode"), Btn("On", (s, e) => PCmd("godmodeplayer \"{0}\" -true")), Btn("Off", (s, e) => PCmd("godmodeplayer \"{0}\" -false")));
@@ -198,6 +201,7 @@ namespace Ezpz
             m.Items.Add("God mode off", null, (s, e) => PCmd("godmodeplayer \"{0}\" -false"));
             m.Items.Add("Lightning strike", null, (s, e) => PCmd("lightning \"{0}\""));
             m.Items.Add(new ToolStripSeparator());
+            m.Items.Add("View this player's logs", null, (s, e) => { if (Sel != null) ShowLogsFor(Sel); });
             m.Items.Add("Copy name", null, (s, e) => { if (Sel != null) Clipboard.SetText(Sel); });
             m.Items.Add("Copy Steam ID", null, (s, e) =>
             {
@@ -217,11 +221,12 @@ namespace Ezpz
 
         void RefreshPlayers(bool readLogs)
         {
-            if (server.State == ServerState.Running) PollOnline();
-            else { onlineNow.Clear(); RebuildPlayerList(); }
+            if (server.State != ServerState.Running) { onlineNow.Clear(); RebuildPlayerList(); }
+            else RebuildPlayerList();
             if (readLogs || (DateTime.Now - lastLogRead).TotalSeconds > 60)
             {
                 lastLogRead = DateTime.Now;
+                LoadCharacters();
                 Task.Run(() => GameData.ReadRoster(S)).ContinueWith(t =>
                 {
                     if (t.Exception == null) Ui(() => { roster = t.Result; RebuildPlayerList(); });
@@ -241,20 +246,41 @@ namespace Ezpz
             Task.Delay(1500).ContinueWith(t => Ui(() =>
             {
                 pollPending = false;
+                var before = onlineNow;
                 lock (captured) onlineNow = new HashSet<string>(captured, StringComparer.OrdinalIgnoreCase);
+                // the server's own answer wins: correct the log feed if it drifted (e.g. a missed timeout)
+                feed.Online.Clear();
+                feed.Online.UnionWith(onlineNow);
+                DiscordPlayersChanged(before, onlineNow);
                 RebuildPlayerList();
             }));
         }
 
+        // Who is online comes from the server's connection log (no console commands, so nothing in PZ's
+        // logs). A quiet "players" check every 5 minutes corrects anything the log missed.
+        readonly ConnectionFeed feed = new ConnectionFeed();
+
         void PlayersTick()
         {
-            if (currentPage != 3 && currentPage != 4) return;
             if (server.State != ServerState.Running)
             {
-                if (onlineNow.Count > 0) { onlineNow.Clear(); RebuildPlayerList(); }
+                if (onlineNow.Count > 0 || ticks % 10 == 0) { feed.Reset(); if (onlineNow.Count > 0) { onlineNow.Clear(); if (currentPage == PPlayers || currentPage == PWorld) RebuildPlayerList(); } }
                 return;
             }
-            if (chkAutoPlayers.Checked && (DateTime.Now - lastPoll).TotalSeconds >= 15) RefreshPlayers(false);
+            if (ticks % 2 == 0)
+            {
+                bool rebuilt;
+                if (feed.Poll(S, out rebuilt))
+                {
+                    var before = onlineNow;
+                    onlineNow = new HashSet<string>(feed.Online, StringComparer.OrdinalIgnoreCase);
+                    DiscordPlayersChanged(before, onlineNow);
+                    if (currentPage == PPlayers || currentPage == PWorld || currentPage == PHome) RebuildPlayerList();
+                }
+            }
+            if ((DateTime.Now - lastPoll).TotalMinutes >= 5 && (DateTime.Now - server.StartedAt).TotalMinutes >= 2) PollOnline();
+            if ((currentPage == PPlayers) && (DateTime.Now - lastLogRead).TotalSeconds > 60) RefreshPlayers(true);
+            if (currentPage == PPlayers) SheetTick();
         }
 
         // All server output comes through here: hide the manager's own polling, pick up facts, then log.
@@ -263,6 +289,7 @@ namespace Ezpz
             foreach (var raw in text.Split('\n'))
             {
                 string l = raw.TrimEnd('\r');
+                if (CollapseHarmless(l)) continue;
                 var ebs = GameData.EbsLine.Match(l);
                 if (ebs.Success) { ebsKhz = ebs.Groups[1].Value; ebsWhen = DateTime.Now; Ui(UpdateEbsLabel); }
                 bool isPlayerLine = l.Contains("Players connected") || PlayerLine.IsMatch(l);
@@ -272,8 +299,29 @@ namespace Ezpz
                     if (m.Success) lock (captured) captured.Add(m.Groups[1].Value.Trim());
                 }
                 if (DateTime.Now < quietUntil && isPlayerLine) continue;
+                if (CaptureStats(l)) continue;
                 Log(l);
             }
+        }
+
+        // B42 prints a full stack trace for every mod that has no animation folders. That is normal
+        // (most mods have none), so collapse each one into a single grey line.
+        bool collapsingTrace;
+        static readonly System.Text.RegularExpressions.Regex MissingModFolder =
+            new System.Text.RegularExpressions.Regex(@"NoSuchFileException: (.*?[\\/]mods[\\/][^\\/]+)[\\/].*?[\\/]media[\\/](\w+)");
+
+        bool CollapseHarmless(string l)
+        {
+            if (l.Contains("AdvancedAnimator$1.visitFileFailed")) { collapsingTrace = true; return true; }
+            if (!collapsingTrace) return false;
+            if (l.StartsWith("\t") || l.StartsWith(" "))
+            {
+                var m = MissingModFolder.Match(l);
+                if (m.Success) Log("[ezpz] (harmless) Mod " + System.IO.Path.GetFileName(m.Groups[1].Value) + " has no " + m.Groups[2].Value + " folder.");
+                return true;
+            }
+            collapsingTrace = false;
+            return false;
         }
 
         void RebuildPlayerList()
@@ -335,6 +383,7 @@ namespace Ezpz
 
         void OnPlayerSelected()
         {
+            UpdateSheet();
             if (lblSel == null) return;
             string n = Sel;
             if (n == null) { lblSel.Text = "Select a player on the left"; lblSel.ForeColor = Theme.Muted; return; }

@@ -8,7 +8,7 @@ namespace Ezpz
     // World & Weather page: EBS radio frequency, weather controls, world events.
     public partial class MainForm
     {
-        Label lblEbs, lblEbsNote, lblLastWeather;
+        Label lblEbs, lblEbsNote;
         TrackBar tbRain;
         Label lblRainVal;
         NumericUpDown nStorm;
@@ -28,10 +28,6 @@ namespace Ezpz
             p.P("Tune any radio or walkie-talkie to this frequency to hear the automated emergency broadcasts, including the daily weather forecast. The game picks it at random for each new world, so it changes after a reset.");
 
             p.H2("Weather");
-            p.P("The server doesn't report its live weather to outside tools, so this shows the last change made from here. For the in-game forecast, tune to the EBS above.");
-            lblLastWeather = p.P("Last change from this app: none yet.", Theme.Text);
-            lblLastWeather.Font = Theme.Bold;
-
             int y = p.Y;
             tbRain = new TrackBar { Minimum = 1, Maximum = 100, Value = 50, TickFrequency = 10, Width = 300, BackColor = Theme.Bg };
             p.Row("Rain intensity", tbRain, 300);
@@ -39,13 +35,13 @@ namespace Ezpz
             p.Controls.Add(lblRainVal);
             tbRain.ValueChanged += (s, e) => lblRainVal.Text = tbRain.Value.ToString();
             p.Buttons(
-                WxBtn("Start rain", Theme.AccentBtn, () => "startrain " + tbRain.Value, () => "Rain at intensity " + tbRain.Value),
-                WxBtn("Stop rain", Theme.Card, () => "stoprain", () => "Rain stopped"));
+                WxBtn("Start rain", Theme.AccentBtn, () => "startrain " + tbRain.Value),
+                WxBtn("Stop rain", Theme.Card, () => "stoprain"));
 
             nStorm = p.Row("Storm length (game hours)", Theme.Num(1, 72, 6), 80);
             p.Buttons(
-                WxBtn("Start storm", Theme.AccentBtn, () => "startstorm " + nStorm.Value, () => "Storm for " + nStorm.Value + " in-game hours"),
-                WxBtn("Clear all weather", Theme.Card, () => "stopweather", () => "All weather cleared"));
+                WxBtn("Start storm", Theme.AccentBtn, () => "startstorm " + nStorm.Value),
+                WxBtn("Clear all weather", Theme.Card, () => "stopweather"));
 
             cbWxPlayer = p.Row("Near player", new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, BackColor = Theme.Input, ForeColor = Theme.Text, FlatStyle = FlatStyle.Flat }, 220);
             p.Hint("Online players only.");
@@ -65,14 +61,13 @@ namespace Ezpz
             p.End();
         }
 
-        Button WxBtn(string text, Color back, Func<string> cmd, Func<string> desc)
+        Button WxBtn(string text, Color back, Func<string> cmd)
         {
             var b = Theme.Btn(text, back);
             b.Click += (s, e) =>
             {
                 if (server.State != ServerState.Running) { Warn("Start the server first."); return; }
                 Cmd(cmd());
-                lblLastWeather.Text = "Last change from this app: " + desc() + "  (at " + DateTime.Now.ToString("HH:mm") + ")";
             };
             return b;
         }
@@ -86,14 +81,28 @@ namespace Ezpz
         void RefreshWorld()
         {
             if (server.State == ServerState.Running && (DateTime.Now - lastPoll).TotalSeconds > 10) RefreshPlayers(false);
+            LookupEbs();
+        }
+
+        bool ebsLooking, ebsLookedUp;
+
+        // Shared with the Home page: read the EBS frequency from the newest server log.
+        void LookupEbs()
+        {
+            if (ebsLooking) return;
+            ebsLooking = true;
             Task.Run(() =>
             {
                 DateTime when;
-                string khz = GameData.FindEbs(S, out when);
+                string khz = null;
+                try { khz = GameData.FindEbs(S, out when); } catch { when = DateTime.MinValue; }
                 Ui(() =>
                 {
                     if (khz != null && (ebsKhz == null || when > ebsWhen)) { ebsKhz = khz; ebsWhen = when; }
+                    ebsLooking = false;
+                    ebsLookedUp = true;
                     UpdateEbsLabel();
+                    if (currentPage == PHome) RefreshGlance();
                 });
             });
         }

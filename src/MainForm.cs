@@ -17,9 +17,11 @@ namespace Ezpz
     {
         const string FirewallRule = "ezpz - Project Zomboid";
         const string LegacyFirewallRule = "PZ Server Manager - Project Zomboid";
+        // One per install, since it targets that install's java.exe.
+        string PrivateTcpRule { get { return "ezpz - Project Zomboid (keep TCP private) " + S.InstallDir.TrimEnd('\\'); } }
 
-        readonly AppSettings S;
-        readonly ServerController server;
+        AppSettings S;                // the server being managed; swapped by SwitchServer
+        ServerController server;
         readonly ConcurrentQueue<string> logQ = new ConcurrentQueue<string>();
         readonly Timer uiTimer = new Timer();
         readonly Timer detectTimer = new Timer();
@@ -28,10 +30,12 @@ namespace Ezpz
         readonly List<Button> navButtons = new List<Button>();
         readonly List<Page> pages = new List<Page>();
         Page pgSetup, pgConfig, pgWorld, pgBackups, pgReset;
+        Panel pgMods;
         Panel pgConsole, pgPlayers;
 
         // header
-        Label lblStatus, lblStats, lblBusy, lblHeaderName;
+        Label lblStatus, lblStats, lblBusy, lblHeaderName, lblNavData;
+        Button btnServerSwitch;
         Button btnStart, btnStop, btnRestart;
 
         string busy;                 // non-null while a long task runs
@@ -44,11 +48,9 @@ namespace Ezpz
         {
             S = AppSettings.Load();
             server = new ServerController(S);
-            server.Output += OnServerOutput;
-            server.StateChanged += () => Ui(OnStateChanged);
-            server.UnexpectedExit += () => Ui(OnCrash);
+            WireServer(server, true);
 
-            Text = "ezpz " + Program.Version + " — Project Zomboid B42 server manager";
+            UpdateTitle();
             Font = Theme.Base;
             BackColor = Theme.Bg;
             ForeColor = Theme.Text;
@@ -67,9 +69,14 @@ namespace Ezpz
 
             BuildSetup();
             BuildConfig();
+            BuildSandbox();
+            BuildMods();
             BuildConsole();
+            BuildLogs();
+            BuildHome();
             BuildPlayers();
             BuildWorld();
+            BuildDiscord();
             BuildBackups();
             BuildReset();
             BuildNav();
@@ -107,8 +114,14 @@ namespace Ezpz
         {
             var h = new Panel { Dock = DockStyle.Top, Height = 64, BackColor = Theme.Side };
             Controls.Add(h);
-            var title = new Label { Text = "ezpz  ·  Project Zomboid B42 Dedicated Server", Font = Theme.H2, ForeColor = Theme.Text, AutoSize = true, Location = new Point(16, 10) };
-            lblHeaderName = new Label { ForeColor = Theme.Muted, AutoSize = true, Location = new Point(18, 36) };
+            // Server switcher: click the server name to switch, add or remove servers.
+            btnServerSwitch = new Button { Font = Theme.H2, ForeColor = Theme.Text, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Location = new Point(10, 4), FlatStyle = FlatStyle.Flat, BackColor = Theme.Side, Cursor = Cursors.Hand, Padding = new Padding(2, 0, 2, 0) };
+            btnServerSwitch.FlatAppearance.BorderSize = 0;
+            btnServerSwitch.FlatAppearance.MouseOverBackColor = Theme.Card;
+            btnServerSwitch.Click += (s, e) => ShowServerMenu();
+            new ToolTip().SetToolTip(btnServerSwitch, "Switch servers, or add one");
+            var title = btnServerSwitch;
+            lblHeaderName = new Label { ForeColor = Theme.Muted, AutoSize = true, Location = new Point(18, 38) };
             lblStatus = new Label { Font = Theme.H2, AutoSize = true, Location = new Point(430, 10) };
             lblStats = new Label { ForeColor = Theme.Muted, AutoSize = true, Location = new Point(432, 36) };
             lblBusy = new Label { ForeColor = Theme.Warn, AutoSize = true, Location = new Point(640, 22) };
@@ -128,45 +141,54 @@ namespace Ezpz
 
         void BuildNav()
         {
-            string[] names = { "1   Setup", "2   Configure", "3   Console", "4   Players & Admin", "5   World & Weather", "6   Backups", "7   Reset" };
+            string[] names = { "Home", "Setup", "Configure", "Sandbox", "Mods", "Console", "Logs", "Players & Admin", "World & Weather", "Discord", "Backups", "Reset" };
             int y = 14;
             for (int i = 0; i < names.Length; i++)
             {
                 int idx = i;
                 var b = new Button
                 {
-                    Text = names[i], FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
-                    Size = new Size(200, 40), Location = new Point(10, y), ForeColor = Theme.Text, Font = Theme.Bold,
+                    Text = (i == PHome ? "⌂   " : i + "   ") + names[i], FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
+                    Size = new Size(200, 36), Location = new Point(10, y), ForeColor = Theme.Text, Font = Theme.Bold,
                     BackColor = Theme.Side, Cursor = Cursors.Hand, Padding = new Padding(8, 0, 0, 0)
                 };
                 b.FlatAppearance.BorderSize = 0;
                 b.Click += (s, e) => ShowPage(idx);
                 nav.Controls.Add(b);
                 navButtons.Add(b);
-                y += 44;
+                y += i == PHome ? 48 : 39;
             }
-            navButtons[6].ForeColor = Theme.Danger;
-            var ver = new Label { Text = "Data:\n" + S.DataDir, ForeColor = Theme.Muted, AutoSize = true, MaximumSize = new Size(200, 0), Location = new Point(14, y + 20) };
-            nav.Controls.Add(ver);
+            navButtons[PReset].ForeColor = Theme.Danger;
+            lblNavData = new Label { Text = "Data:\n" + S.DataDir, ForeColor = Theme.Muted, AutoSize = true, MaximumSize = new Size(200, 0), Location = new Point(14, y + 20) };
+            nav.Controls.Add(lblNavData);
         }
+
+        // Page numbers, in nav order.
+        const int PHome = 0, PSetup = 1, PConfig = 2, PSandbox = 3, PMods = 4, PConsole = 5, PLogs = 6, PPlayers = 7, PWorld = 8, PDiscord = 9, PBackups = 10, PReset = 11;
 
         public int StartPage;
         int currentPage = -1;
         void ShowPage(int i)
         {
+            if (i != currentPage && !LeaveCheck()) return;
             currentPage = i;
-            Control[] all = { pgSetup, pgConfig, pgConsole, pgPlayers, pgWorld, pgBackups, pgReset };
+            Control[] all = { pgHome, pgSetup, pgConfig, pgSandbox, pgMods, pgConsole, pgLogs, pgPlayers, pgWorld, pgDiscord, pgBackups, pgReset };
             for (int k = 0; k < all.Length; k++)
             {
                 all[k].Visible = k == i;
                 navButtons[k].BackColor = k == i ? Theme.Card : Theme.Side;
             }
-            if (i == 0) RefreshChecklist();
-            if (i == 1) LoadConfig();
-            if (i == 3) RefreshPlayers(true);
-            if (i == 4) RefreshWorld();
-            if (i == 5) RefreshBackupList();
-            if (i == 6) UpdateResetPreview();
+            if (i == PSetup) RefreshChecklist();
+            if (i == PConfig) LoadConfig();
+            if (i == PSandbox) RefreshSandbox(false);
+            if (i == PMods) RefreshMods(false);
+            if (i == PHome) RefreshHome();
+            if (i == PLogs) LoadLogs(false);
+            if (i == PPlayers) RefreshPlayers(true);
+            if (i == PWorld) RefreshWorld();
+            if (i == PDiscord) RefreshDiscord();
+            if (i == PBackups) RefreshBackupList();
+            if (i == PReset) UpdateResetPreview();
         }
 
         Page NewPage()
@@ -189,7 +211,7 @@ namespace Ezpz
             "Choose folders, a server name and an admin password, then Save",
             "Install the server files with SteamCMD",
             "Generate the default config (first start of the server)",
-            "Allow the game ports through Windows Firewall",
+            "Set up Windows Firewall (open the game ports, keep the server's TCP ports private)",
             "Customize your server on the Configure page (optional)",
             "Forward the UDP ports on your router (only for players outside your home network)",
             "Start the server",
@@ -255,7 +277,7 @@ namespace Ezpz
             p.H2("First start & network");
             var gen = Theme.Btn("Generate default config");
             gen.Click += async (s, e) => await GenerateConfigFlow();
-            var fw = Theme.Btn("Add Windows Firewall rule");
+            var fw = Theme.Btn("Set up Windows Firewall");
             fw.Click += async (s, e) => await FirewallFlow();
             var ip = Theme.Btn("Show my public IP");
             ip.Click += async (s, e) => await ShowPublicIp();
@@ -309,7 +331,10 @@ namespace Ezpz
 
         void RefreshAll()
         {
-            lblHeaderName.Text = "Server ID: " + S.ServerName + "    ·    " + S.DataDir;
+            btnServerSwitch.Text = S.ServerName + "  ▾";
+            lblHeaderName.Text = S.DataDir;
+            lblNavData.Text = "Data:\n" + S.DataDir;
+            UpdateTitle();
             RefreshChecklist();
             OnStateChanged();
         }
@@ -320,7 +345,7 @@ namespace Ezpz
             lblBuild.Text = bi != null ? "Installed: " + bi + " in " + S.InstallDir : "Not installed yet.";
             bool[] done =
             {
-                AppSettings.ValidServerName(S.ServerName) && S.AdminPassword.Length > 0 && File.Exists(Path.Combine(AppSettings.ManagerDir, "manager.ini")),
+                AppSettings.ValidServerName(S.ServerName) && S.AdminPassword.Length > 0 && S.IsSaved,
                 File.Exists(S.StartBat),
                 File.Exists(S.IniPath),
                 firewallOk,
@@ -339,8 +364,9 @@ namespace Ezpz
             lblNextStep.Text = next < 0 ? "All set. Your server is running." : "Next:  " + Steps[next];
             Task.Run(() =>
             {
-                bool ok = RunHidden("netsh", "advfirewall firewall show rule name=\"" + FirewallRule + "\"") == 0
-                       || RunHidden("netsh", "advfirewall firewall show rule name=\"" + LegacyFirewallRule + "\"") == 0;
+                bool ok = (RunHidden("netsh", "advfirewall firewall show rule name=\"" + FirewallRule + "\"") == 0
+                        || RunHidden("netsh", "advfirewall firewall show rule name=\"" + LegacyFirewallRule + "\"") == 0)
+                       && RunHidden("netsh", "advfirewall firewall show rule name=\"" + PrivateTcpRule + "\"") == 0;
                 if (ok != firewallOk) { firewallOk = ok; Ui(RefreshChecklist); }
             });
             lblIps.Text = "This PC's local IP: " + string.Join(", ", LocalIps());
@@ -373,7 +399,7 @@ namespace Ezpz
             try
             {
                 if (server.State != ServerState.Stopped) { Warn("Stop the server before installing or updating."); return; }
-                ShowPage(2);
+                ShowPage(PConsole);
                 await SteamCmd.InstallOrUpdate(S, validate, Log);
             }
             catch (Exception ex) { Log("[steamcmd] ERROR: " + ex.Message); Warn(ex.Message); }
@@ -396,10 +422,19 @@ namespace Ezpz
             if (!int.TryParse(ini.Get("DefaultPort", "16261"), out p1)) p1 = 16261;
             if (!int.TryParse(ini.Get("UDPPort", "16262"), out p2)) p2 = 16262;
             string ports = p2 == p1 + 1 ? p1 + "-" + p2 : p1 + "," + p2;
+            string java = Path.Combine(S.InstallDir, "jre64", "bin", "java.exe");
+            // Two rules: allow the game's UDP ports, and block inbound TCP to this install's Java from other machines.
+            // PZ only needs UDP; its TCP listeners (the metrics server ezpz reads, and RCON) are for this PC only.
+            // Block rules win over the allow rule Windows created for java.exe on first launch. Local connections aren't filtered.
             string cmd = "/c netsh advfirewall firewall delete rule name=\"" + FirewallRule + "\" >nul 2>&1 & " +
                          "netsh advfirewall firewall delete rule name=\"" + LegacyFirewallRule + "\" >nul 2>&1 & " +
-                         "netsh advfirewall firewall add rule name=\"" + FirewallRule + "\" dir=in action=allow protocol=UDP localport=" + ports;
-            if (MessageBox.Show(this, "This adds an inbound Windows Firewall rule allowing UDP " + ports + ".\nWindows will ask for administrator permission.", "Firewall", MessageBoxButtons.OKCancel) != DialogResult.OK) return;
+                         "netsh advfirewall firewall add rule name=\"" + FirewallRule + "\" dir=in action=allow protocol=UDP localport=" + ports + " & " +
+                         "netsh advfirewall firewall delete rule name=\"" + PrivateTcpRule + "\" >nul 2>&1 & " +
+                         "netsh advfirewall firewall add rule name=\"" + PrivateTcpRule + "\" dir=in action=block protocol=TCP program=\"" + java + "\"";
+            if (MessageBox.Show(this, "This sets up two Windows Firewall rules:\n\n"
+                + "• Allow UDP " + ports + " in, so players can connect.\n"
+                + "• Block TCP from other machines to the server's Java. Players don't use TCP; it keeps the server's stats and remote-command ports private to this PC.\n\n"
+                + "Windows will ask for administrator permission.", "Firewall", MessageBoxButtons.OKCancel) != DialogResult.OK) return;
             try
             {
                 var psi = new ProcessStartInfo("cmd.exe", cmd) { Verb = "runas", UseShellExecute = true, WindowStyle = ProcessWindowStyle.Hidden };
@@ -443,9 +478,6 @@ namespace Ezpz
             new Field("UDPPort", "Second UDP port", "int", null),
             new Field("RCONPort", "RCON port (TCP)", "int", "Lets the manager control a server it didn't start. No need to forward this port."),
             new Field("RCONPassword", "RCON password", "text", null),
-            new Field("Mods", "Mods", "text", "Mod IDs separated by ; (copy them from each mod's Workshop page)."),
-            new Field("WorkshopItems", "Workshop item IDs", "text", "Steam Workshop numbers separated by ; (the server downloads these on start)."),
-            new Field("Map", "Map", "text", "Map folders separated by ; with Muldraugh, KY last."),
         };
 
         readonly Dictionary<string, Control> cfgCtl = new Dictionary<string, Control>();
@@ -458,7 +490,7 @@ namespace Ezpz
             var p = pgConfig = NewPage();
             p.H1("Configure");
             lblCfgMissing = p.P("No config file yet. Click 'Generate default config' on the Setup page first, so you start from Project Zomboid's full default settings.", Theme.Warn);
-            p.P("Most settings take effect after a restart. Click 'Apply live' to reload settings on a running server.");
+            p.P("Most settings take effect after a restart. Click 'Apply live' to reload settings on a running server. Mods are set up on the Mods page.");
 
             var reload = Theme.Btn("Reload from disk");
             reload.Click += (s, e) => LoadConfig();
@@ -480,8 +512,8 @@ namespace Ezpz
 
             p.H2("World rules (sandbox), spawns & imports");
             p.P("Zombie count, loot, XP, day length and similar world rules are in the SandboxVars file. Edit it directly, or set up a game with the in-game Host menu and import its files here.");
-            var sb = Theme.Btn("Edit SandboxVars");
-            sb.Click += (s, e) => EditFile(S.SandboxPath);
+            var sb = Theme.Btn("Sandbox (world rules)");
+            sb.Click += (s, e) => ShowPage(PSandbox);
             var sr = Theme.Btn("Edit spawn regions");
             sr.Click += (s, e) => EditFile(S.SpawnRegionsPath);
             var ini = Theme.Btn("Edit .ini in Notepad");
@@ -546,7 +578,43 @@ namespace Ezpz
                                    || Convert.ToString(r.Cells[1].Value).IndexOf(f, StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        void SaveConfig()
+        // True if what's on the Configure page differs from the file.
+        bool ConfigDirty()
+        {
+            if (grid == null || !File.Exists(S.IniPath)) return false;
+            grid.EndEdit();
+            foreach (DataGridViewRow r in grid.Rows)
+                if (Convert.ToString(r.Cells[1].Value) != Convert.ToString(r.Tag)) return true;
+            foreach (var f in Fields)
+            {
+                var c = cfgCtl[f.Key];
+                var cb = c as CheckBox;
+                string v = cb != null ? (cb.Checked ? "true" : "false") : c.Text.Trim();
+                string old = Convert.ToString(c.Tag);
+                bool same = cb != null ? old.Trim().Equals(v, StringComparison.OrdinalIgnoreCase) || (old == "" && !cb.Checked) : old == v;
+                if (!same) return true;
+            }
+            return false;
+        }
+
+        // Before leaving a page (or the server, or the app): offer to save edits instead of silently dropping them.
+        bool LeaveCheck()
+        {
+            if (currentPage == PDiscord && DiscordDirty()) return AskSave("Discord settings", SaveDiscordAll, RefreshDiscord);
+            if (currentPage == PConfig && ConfigDirty()) return AskSave("server settings", SaveConfig, LoadConfig);
+            return true;
+        }
+
+        bool AskSave(string what, Func<bool> save, Action discard)
+        {
+            var r = MessageBox.Show(this, "You have unsaved " + what + " on this page. Save them?", "Unsaved changes", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Question);
+            if (r == DialogResult.Cancel) return false;
+            if (r == DialogResult.Yes) return save();
+            discard();
+            return true;
+        }
+
+        bool SaveConfig()
         {
             grid.EndEdit();
             var ini = IniFile.Load(S.IniPath);
@@ -564,7 +632,7 @@ namespace Ezpz
                 string old = Convert.ToString(c.Tag);
                 bool same = cb != null ? old.Trim().Equals(v, StringComparison.OrdinalIgnoreCase) || (old == "" && !cb.Checked) : old == v;
                 if (same) continue;
-                if (f.Kind == "int") { int n; if (!int.TryParse(v, out n)) { Warn(f.Label + " must be a whole number."); return; } }
+                if (f.Kind == "int") { int n; if (!int.TryParse(v, out n)) { Warn(f.Label + " must be a whole number."); return false; } }
                 ini.Set(f.Key, v);
                 changes++;
             }
@@ -579,6 +647,7 @@ namespace Ezpz
             Log("[ezpz] Saved " + changes + " change(s) to " + S.IniPath + (server.State != ServerState.Stopped ? "  (restart or 'Apply live' to take effect)" : ""));
             LoadConfig();
             RefreshChecklist();
+            return true;
         }
 
         void EditFile(string path)
@@ -670,19 +739,16 @@ namespace Ezpz
             input.Controls.Add(send);
 
             var opts = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 44, WrapContents = false, Padding = new Padding(0, 10, 0, 0) };
-            var auto = Theme.Check("Auto-restart on crash", S.AutoRestart);
+            var auto = chkAutoRestart = Theme.Check("Auto-restart on crash", S.AutoRestart);
             auto.CheckedChanged += (s, e) => { S.AutoRestart = auto.Checked; S.Save(); };
             var lbl = new Label { Text = "Scheduled restart every", AutoSize = true, Margin = new Padding(16, 4, 4, 0) };
-            var hrs = Theme.Num(0, 168, S.RestartHours);
+            var hrs = numRestartHours = Theme.Num(0, 168, S.RestartHours);
             hrs.Width = 60;
             hrs.ValueChanged += (s, e) => { S.RestartHours = (int)hrs.Value; S.Save(); };
             var lbl2 = new Label { Text = "hours (0 = off)", AutoSize = true, Margin = new Padding(4, 4, 16, 0) };
-            var upd = Theme.Check("Update game on scheduled restart", S.UpdateOnRestart);
+            var upd = chkUpdateOnRestart = Theme.Check("Update game on scheduled restart", S.UpdateOnRestart);
             upd.CheckedChanged += (s, e) => { S.UpdateOnRestart = upd.Checked; S.Save(); };
-            var bos = Theme.Check("Back up on start", S.BackupOnStart);
-            bos.Margin = new Padding(16, 3, 0, 0);
-            bos.CheckedChanged += (s, e) => { S.BackupOnStart = bos.Checked; S.Save(); };
-            opts.Controls.AddRange(new Control[] { auto, lbl, hrs, lbl2, upd, bos });
+            opts.Controls.AddRange(new Control[] { auto, lbl, hrs, lbl2, upd });
             p.Controls.Add(opts);
             p.Controls.Add(input);
             rtb.BringToFront();
@@ -727,6 +793,7 @@ namespace Ezpz
 
         static Color ColorFor(string s)
         {
+            if (s.StartsWith("[ezpz] (harmless)")) return Theme.Muted;
             if (s.StartsWith("[ezpz]")) return Theme.Accent;
             if (s.StartsWith("[steamcmd]")) return Theme.Info;
             if (s.StartsWith("[backup]") || s.StartsWith("[reset]")) return Theme.Warn;
@@ -734,105 +801,6 @@ namespace Ezpz
             if (s.IndexOf("ERROR", StringComparison.Ordinal) >= 0 || s.IndexOf("Exception", StringComparison.Ordinal) >= 0) return Theme.Danger;
             if (s.StartsWith("WARN")) return Theme.Warn;
             return Color.FromArgb(190, 194, 200);
-        }
-
-        // ================================================================== BACKUPS
-
-        ListView lvBackups;
-
-        void BuildBackups()
-        {
-            var p = pgBackups = NewPage();
-            p.H1("Backups");
-            p.P("A backup is one .zip with this server's world, its player and account database, and its config files. The manager also backs up automatically before every reset and restore, and on each start if that option is on (Console page).");
-            var now = Theme.Btn("Back up now", Theme.AccentBtn);
-            now.Click += async (s, e) => await BackupFlow("manual");
-            var restore = Theme.Btn("Restore selected…");
-            restore.Click += async (s, e) => await RestoreFlow();
-            var del = Theme.Btn("Delete selected", Theme.DangerBtn);
-            del.Click += (s, e) => DeleteBackups();
-            var open = Theme.Btn("Open backups folder");
-            open.Click += (s, e) => OpenFolder(S.BackupDir);
-            var refresh = Theme.Btn("Refresh");
-            refresh.Click += (s, e) => RefreshBackupList();
-            p.Buttons(now, restore, del, open, refresh);
-            var keep = p.Row("Keep this many auto-backups", Theme.Num(1, 500, S.KeepAutoBackups), 80);
-            keep.ValueChanged += (s, e) => { S.KeepAutoBackups = (int)keep.Value; S.Save(); };
-            p.Hint("Older automatic start-up backups are deleted. Manual, pre-reset and pre-restore backups are never deleted automatically.");
-
-            lvBackups = new ListView
-            {
-                View = View.Details, FullRowSelect = true, Size = new Size(Page.Wide, 420), BackColor = Theme.Input,
-                ForeColor = Theme.Text, BorderStyle = BorderStyle.FixedSingle, HideSelection = false
-            };
-            lvBackups.Columns.Add("Backup", 470);
-            lvBackups.Columns.Add("Created", 180);
-            lvBackups.Columns.Add("Size", 100);
-            lvBackups.Columns.Add("Type", 120);
-            p.Add(lvBackups, 420);
-            p.End();
-        }
-
-        void RefreshBackupList()
-        {
-            lvBackups.Items.Clear();
-            if (!Directory.Exists(S.BackupDir)) return;
-            foreach (var f in new DirectoryInfo(S.BackupDir).GetFiles("*.zip").OrderByDescending(x => x.CreationTime))
-            {
-                var m = Regex.Match(f.Name, @"_([a-z\-]+)\.zip$");
-                var it = new ListViewItem(new[] { f.Name, f.CreationTime.ToString("yyyy-MM-dd HH:mm:ss"), Util.Size(f.Length), m.Success ? m.Groups[1].Value : "" });
-                it.Tag = f.FullName;
-                if (!f.Name.StartsWith(S.ServerName + "_")) it.ForeColor = Theme.Muted;
-                lvBackups.Items.Add(it);
-            }
-        }
-
-        async Task<bool> BackupFlow(string reason)
-        {
-            if (!BeginBusy("Backing up…")) return false;
-            try
-            {
-                if (server.State == ServerState.Running)
-                {
-                    Log("[backup] Server is running. Saving the world first...");
-                    try { server.SendCommand("save"); } catch { }
-                    await Task.Delay(8000);
-                }
-                await Task.Run(() => Backups.Create(S, reason, Log));
-                if (reason == "auto") Backups.PruneAuto(S, Log);
-                return true;
-            }
-            catch (Exception ex) { Log("[backup] ERROR: " + ex.Message); Warn("Backup failed: " + ex.Message); return false; }
-            finally { EndBusy(); RefreshBackupList(); }
-        }
-
-        async Task RestoreFlow()
-        {
-            if (lvBackups.SelectedItems.Count != 1) { Warn("Select one backup to restore."); return; }
-            string zip = (string)lvBackups.SelectedItems[0].Tag;
-            if (!Confirm("Restore " + Path.GetFileName(zip) + "?\n\nThis replaces the current world, accounts and config of '" + S.ServerName + "'. A 'pre-restore' backup of the current state is made first.")) return;
-            if (!await EnsureStopped("restore")) return;
-            if (!await BackupFlow("pre-restore")) return;
-            if (!BeginBusy("Restoring…")) return;
-            try { await Task.Run(() => Backups.Restore(S, zip, Log)); Info("Restore complete."); }
-            catch (Exception ex) { Log("[backup] ERROR: " + ex.Message); Warn(ex.Message); }
-            finally { EndBusy(); RefreshBackupList(); }
-        }
-
-        void DeleteBackups()
-        {
-            if (lvBackups.SelectedItems.Count == 0) return;
-            if (!Confirm("Move " + lvBackups.SelectedItems.Count + " backup(s) to the Recycle Bin?")) return;
-            foreach (ListViewItem it in lvBackups.SelectedItems)
-            {
-                try
-                {
-                    Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile((string)it.Tag,
-                        Microsoft.VisualBasic.FileIO.UIOption.OnlyErrorDialogs, Microsoft.VisualBasic.FileIO.RecycleOption.SendToRecycleBin);
-                }
-                catch (Exception ex) { Log("[backup] " + ex.Message); }
-            }
-            RefreshBackupList();
         }
 
         // ================================================================== RESET
@@ -996,14 +964,29 @@ namespace Ezpz
         async Task StartFlow()
         {
             if (server.State != ServerState.Stopped) { Info("The server is already " + server.State.ToString().ToLower() + "."); return; }
-            if (!File.Exists(S.StartBat)) { Warn("The server isn't installed yet. Use 'Install / Update server' on the Setup page."); ShowPage(0); return; }
-            if (S.AdminPassword == "") { Warn("Set an admin password on the Setup page first."); ShowPage(0); return; }
+            if (!File.Exists(S.StartBat)) { Warn("The server isn't installed yet. Use 'Install / Update server' on the Setup page."); ShowPage(PSetup); return; }
+            if (S.AdminPassword == "") { Warn("Set an admin password on the Setup page first."); ShowPage(PSetup); return; }
             if (busy != null) { Warn("Please wait: " + busy); return; }
+            var others = await Task.Run(() => OtherRunningServers());
+            // Right after a stop (e.g. a restart) the old process can take a few seconds to finish closing.
+            // If what we found is this same server, wait for it rather than refusing to start.
+            for (int wait = 0; wait < 20 && others.Count > 0 && others.All(o => o.Equals(S.ServerName, StringComparison.OrdinalIgnoreCase)); wait++)
+            {
+                if (wait == 0) Log("[ezpz] Waiting for the previous server process to finish closing…");
+                await Task.Delay(1000);
+                others = await Task.Run(() => OtherRunningServers());
+            }
+            if (others.Count > 0)
+            {
+                Warn("Another Project Zomboid server is already running on this PC (" + string.Join(", ", others) + ").\n\n"
+                   + "ezpz runs one server at a time. Switch to that server with the server name at the top left and stop it first.");
+                return;
+            }
             restartWarned.Clear();
             if (S.BackupOnStart && Directory.Exists(S.SaveDir)) await BackupFlow("auto");
             try
             {
-                ShowPage(2);
+                ShowPage(PConsole);
                 server.Start();
             }
             catch (Exception ex) { Log("[ezpz] ERROR: " + ex.Message); Warn(ex.Message); server.StopWhenStarted = false; }
@@ -1033,15 +1016,23 @@ namespace Ezpz
 
         void OnCrash()
         {
-            if (!S.AutoRestart) { Log("[ezpz] Server stopped unexpectedly. Auto-restart is off."); return; }
+            lastCrashAt = DateTime.Now;
+            if (!S.AutoRestart)
+            {
+                Log("[ezpz] Server stopped unexpectedly. Auto-restart is off.");
+                Notify(DiscordEvent.Crash, "💥 " + ServerTitle() + " crashed", "Auto-restart is off, so it stays down until someone starts it.", DcRed);
+                return;
+            }
             crashTimes.Add(DateTime.Now);
             crashTimes.RemoveAll(t => t < DateTime.Now.AddMinutes(-10));
             if (crashTimes.Count >= 3)
             {
                 Log("[ezpz] Server crashed 3 times in 10 minutes. Auto-restart paused. Check the console and logs for the cause.");
+                Notify(DiscordEvent.Crash, "💥 " + ServerTitle() + " keeps crashing", "3 crashes in 10 minutes, so automatic restarts are paused. An admin needs to check the server.", DcRed);
                 return;
             }
             Log("[ezpz] Server stopped unexpectedly. Restarting in 15 seconds...");
+            Notify(DiscordEvent.Crash, "💥 " + ServerTitle() + " crashed", "Restarting automatically in 15 seconds.", DcAmber);
             Task.Delay(15000).ContinueWith(t => Ui(async () =>
             {
                 if (server.State == ServerState.Stopped) await StartFlow();
@@ -1053,9 +1044,10 @@ namespace Ezpz
 
         void OnSecond()
         {
+            ticks++;
             if (!server.Attached)
             {
-                if (++ticks % 5 == 0 && !detecting)
+                if (ticks % 5 == 0 && !detecting)
                 {
                     detecting = true;
                     Task.Run(() => { try { server.DetectExisting(); } finally { detecting = false; } });
@@ -1064,6 +1056,11 @@ namespace Ezpz
             }
             UpdateStats();
             PlayersTick();
+            ModWatchTick();
+            DiscordTick();
+            BackupTick();
+            if (currentPage == PLogs && ticks % 10 == 0) LoadLogs(false);
+            if (currentPage == PHome && ticks % 3 == 0) RefreshHome();
 
             // scheduled restarts with in-game warnings
             if (server.State == ServerState.Running && S.RestartHours > 0 && busy == null)
@@ -1072,7 +1069,11 @@ namespace Ezpz
                 foreach (int m in new[] { 15, 5, 1 })
                 {
                     if (left.TotalMinutes <= m && left.TotalMinutes > m - 1 && restartWarned.Add(m))
+                    {
                         Cmd("servermsg \"Scheduled server restart in " + m + " minute" + (m == 1 ? "" : "s") + ". Find somewhere safe!\"");
+                        if (restartWarned.Count == 1)
+                            Notify(DiscordEvent.RestartWarning, "🔁 " + ServerTitle() + " restarts in " + m + " minute" + (m == 1 ? "" : "s"), "Scheduled restart. It'll be back in a couple of minutes.", DcAmber);
+                    }
                 }
                 if (left.TotalSeconds <= 0 && restartWarned.Add(0))
                 {
@@ -1096,16 +1097,31 @@ namespace Ezpz
             lblStats.Text = t;
         }
 
+        string StateText()
+        {
+            var st = server.State;
+            return st == ServerState.Stopped ? "Stopped" : st == ServerState.Starting ? "Starting…" : st == ServerState.Running ? "Running" : "Stopping…";
+        }
+
+        // Window title: "<Server ID>: <status> — ezpz <version>"
+        void UpdateTitle()
+        {
+            Text = S.ServerName + ": " + StateText() + " — ezpz " + Program.Version;
+        }
+
         void OnStateChanged()
         {
             var st = server.State;
-            lblStatus.Text = "● " + (st == ServerState.Stopped ? "Stopped" : st == ServerState.Starting ? "Starting…" : st == ServerState.Running ? "Running" : "Stopping…");
+            lblStatus.Text = "● " + StateText();
+            UpdateTitle();
+            DiscordOnState(st);
+            if (currentPage == PHome) RefreshHome();
             lblStatus.ForeColor = st == ServerState.Running ? Theme.Accent : st == ServerState.Stopped ? Theme.Muted : Theme.Warn;
             btnStart.Enabled = st == ServerState.Stopped;
             btnStart.BackColor = btnStart.Enabled ? Theme.AccentBtn : Theme.Card;
             btnStop.Enabled = st == ServerState.Running || st == ServerState.Starting;
             btnRestart.Enabled = st == ServerState.Running;
-            if (currentPage == 0) RefreshChecklist();
+            if (currentPage == PSetup) RefreshChecklist();
             UpdateStats();
         }
 
@@ -1127,6 +1143,7 @@ namespace Ezpz
 
         async void OnClosingForm(object sender, FormClosingEventArgs e)
         {
+            if (!closingConfirmed && !LeaveCheck()) { e.Cancel = true; return; }
             if (closingConfirmed || !server.Attached) return;
             e.Cancel = true;
             var r = MessageBox.Show(this, "The server is still running and needs the manager open.\n\nStop the server (saving the world) and exit?", "Exit", MessageBoxButtons.OKCancel, MessageBoxIcon.Question);

@@ -9,9 +9,9 @@ cd /d "%~dp0"
 set OUT=%~1
 if "%OUT%"=="" set OUT=ezpz.exe
 if not exist "%CSC%" (echo Could not find the .NET Framework C# compiler at %CSC% & exit /b 1)
-"%CSC%" /nologo /codepage:65001 /target:winexe /optimize+ /win32icon:assets\ezpz.ico /out:"%OUT%" ^
+"%CSC%" /nologo /codepage:65001 /target:winexe /optimize+ /win32icon:assets\ezpz.ico /resource:assets\ezpz-256.png,ezpz.png /out:"%OUT%" ^
   /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll ^
-  /r:System.Management.dll /r:System.Security.dll /r:Microsoft.VisualBasic.dll ^
+  /r:System.Management.dll /r:System.Security.dll /r:Microsoft.VisualBasic.dll /r:System.Web.Extensions.dll ^
   /r:"%FW%\System.IO.Compression.dll" /r:"%FW%\System.IO.Compression.FileSystem.dll" ^
   src\*.cs
 if errorlevel 1 (echo BUILD FAILED & exit /b 1)

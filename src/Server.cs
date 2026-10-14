@@ -31,6 +31,8 @@ namespace Ezpz
 
         public ServerState State { get; private set; }
         public DateTime StartedAt { get; private set; }
+        // Local port of PZ's built-in Prometheus metrics server (0 = none). Picked fresh at each launch.
+        public int MetricsPort { get; private set; }
         public bool StopWhenStarted;
 
         public ServerController(AppSettings s) { S = s; State = ServerState.Stopped; }
@@ -56,6 +58,17 @@ namespace Ezpz
         }
 
         // Turn StartServer64.bat into a direct java.exe command line so we own the real process.
+        int pendingMetricsPort;
+
+        static int FreeLocalPort()
+        {
+            var l = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0);
+            l.Start();
+            int port = ((IPEndPoint)l.LocalEndpoint).Port;
+            l.Stop();
+            return port;
+        }
+
         string AdminPasswordArg { get { return " -adminpassword " + Util.QuoteArg(S.AdminPassword); } }
 
         public void BuildCommand(out string exe, out string args)
@@ -96,6 +109,21 @@ namespace Ezpz
 
             args = Regex.Replace(args, @"-Xms\d+[kKmMgG]?", "-Xms" + S.MinRamGB + "g");
             args = Regex.Replace(args, @"-Xmx\d+[kKmMgG]?", "-Xmx" + S.MaxRamGB + "g");
+            // Java memory log for the Health page. JVM options must come before the main class.
+            if (args.IndexOf("-Xlog:gc", StringComparison.Ordinal) < 0)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(S.GcLogPath));
+                string gcArg = Util.QuoteArg("-Xlog:gc,gc+init:file=\"" + S.GcLogPath + "\":time,uptime,level,tags:filecount=5,filesize=20M");
+                int main = args.IndexOf("zombie.network.GameServer", StringComparison.Ordinal);
+                args = args.Substring(0, main) + gcArg + " " + args.Substring(main);
+            }
+            // PZ's built-in metrics server (read by the Home page instead of polling the stats console command).
+            if (args.IndexOf("-DprometheusPort", StringComparison.Ordinal) < 0)
+            {
+                pendingMetricsPort = FreeLocalPort();
+                int main = args.IndexOf("zombie.network.GameServer", StringComparison.Ordinal);
+                args = args.Substring(0, main) + "-DprometheusPort=" + pendingMetricsPort + " " + args.Substring(main);
+            }
             args += " -servername " + Util.QuoteArg(S.ServerName);
             args += " " + Util.QuoteArg("-cachedir=" + S.DataDir);
             if (!string.IsNullOrEmpty(S.AdminPassword))
@@ -158,6 +186,7 @@ namespace Ezpz
             p.BeginOutputReadLine();
             p.BeginErrorReadLine();
             StartedAt = DateTime.Now;
+            MetricsPort = pendingMetricsPort;
             SetState(ServerState.Starting);
         }
 
@@ -270,6 +299,8 @@ namespace Ezpz
                         if (detachedPid == 0)
                         {
                             detachedPid = Convert.ToInt32(mo["ProcessId"]);
+                            var mp = Regex.Match(cl, @"-DprometheusPort=(\d+)");
+                            MetricsPort = mp.Success ? int.Parse(mp.Groups[1].Value) : 0;
                             try { StartedAt = Process.GetProcessById(detachedPid).StartTime; } catch { StartedAt = DateTime.Now; }
                             Emit("[ezpz] Found a running server '" + S.ServerName + "' (PID " + detachedPid + "). Showing its console log; commands go via RCON.");
                             tailPos = File.Exists(S.ConsoleLogPath) ? Math.Max(0, new FileInfo(S.ConsoleLogPath).Length - 4000) : 0;
@@ -401,7 +432,17 @@ namespace Ezpz
             }
         }
 
-        static Task<int> RunAsync(string exe, string args, string wd, Action<string> log)
+        // Only one SteamCMD at a time: an update check, a server update and a mod download must not overlap.
+        static readonly SemaphoreSlim gate = new SemaphoreSlim(1, 1);
+
+        public static async Task<int> RunAsync(string exe, string args, string wd, Action<string> log)
+        {
+            await gate.WaitAsync();
+            try { return await RunOnce(exe, args, wd, log); }
+            finally { gate.Release(); }
+        }
+
+        static Task<int> RunOnce(string exe, string args, string wd, Action<string> log)
         {
             var tcs = new TaskCompletionSource<int>();
             var psi = new ProcessStartInfo(exe, args);
@@ -420,6 +461,29 @@ namespace Ezpz
             p.BeginOutputReadLine();
             p.BeginErrorReadLine();
             return tcs.Task;
+        }
+
+        public static string InstalledBuildId(AppSettings s)
+        {
+            if (!File.Exists(s.AppManifest)) return null;
+            var b = Regex.Match(File.ReadAllText(s.AppManifest), "\"buildid\"\\s+\"(\\d+)\"");
+            return b.Success ? b.Groups[1].Value : null;
+        }
+
+        // Asks Steam for the newest build of the server on the configured branch. Null if it couldn't tell.
+        public static async Task<string> LatestBuildId(AppSettings s, Action<string> log)
+        {
+            await EnsureInstalled(s, log);
+            var sb = new StringBuilder();
+            await RunAsync(s.SteamCmdExe, "+login anonymous +app_info_update 1 +app_info_print " + AppId + " +quit", s.SteamCmdDir,
+                l => { lock (sb) sb.AppendLine(l.StartsWith("[steamcmd] ") ? l.Substring(11) : l); });
+            string text;
+            lock (sb) text = sb.ToString();
+            int at = text.IndexOf("\"branches\"", StringComparison.Ordinal);
+            if (at < 0) return null;
+            string branch = string.IsNullOrEmpty(s.Branch) ? "public" : s.Branch;
+            var m = Regex.Match(text.Substring(at), "\"" + Regex.Escape(branch) + "\"\\s*\\{[^}]*?\"buildid\"\\s+\"(\\d+)\"", RegexOptions.Singleline);
+            return m.Success ? m.Groups[1].Value : null;
         }
 
         public static string InstalledBuildInfo(AppSettings s)
@@ -481,49 +545,143 @@ namespace Ezpz
 
         public static string ServerNameIn(string zip)
         {
-            using (var za = ZipFile.OpenRead(zip))
-            {
-                var m = za.GetEntry(ManifestName) ?? za.GetEntry(LegacyManifestName);
-                if (m == null) return null;
+            using (var za = ZipFile.OpenRead(zip)) return ServerNameIn(za);
+        }
+
+        // ezpz backups carry ezpz-backup.txt; PZ's own carry readme.txt with "ServerName: ...".
+        static string ServerNameIn(ZipArchive za)
+        {
+            var m = za.GetEntry(ManifestName) ?? za.GetEntry(LegacyManifestName);
+            if (m != null)
                 using (var r = new StreamReader(m.Open()))
                 {
                     string l;
                     while ((l = r.ReadLine()) != null)
                         if (l.StartsWith("servername=")) return l.Substring(11);
                 }
-            }
+            var pz = za.GetEntry(PzReadme);
+            if (pz != null)
+                using (var r = new StreamReader(pz.Open()))
+                {
+                    string l;
+                    while ((l = r.ReadLine()) != null)
+                        if (l.StartsWith("ServerName:")) return l.Substring(11).Trim();
+                }
             return null;
         }
 
+        const string PzReadme = "readme.txt";
+
+        public class BackupInfo
+        {
+            public string Path, Server, Kind, WorldVersion = "";
+            public bool ByPZ, HasWorld, HasAccounts, HasConfig;
+            public DateTime Created;
+            public long Size;
+            public string Contents
+            {
+                get
+                {
+                    var parts = new List<string>();
+                    if (HasWorld) parts.Add("world");
+                    if (HasAccounts) parts.Add("accounts");
+                    if (HasConfig) parts.Add("config");
+                    return parts.Count == 0 ? "(empty)" : string.Join(", ", parts);
+                }
+            }
+        }
+
+        static BackupInfo Describe(string zip, bool byPz)
+        {
+            var fi = new FileInfo(zip);
+            var b = new BackupInfo { Path = zip, ByPZ = byPz, Created = fi.LastWriteTime, Size = fi.Length };
+            using (var za = ZipFile.OpenRead(zip))
+            {
+                b.Server = ServerNameIn(za);
+                foreach (var e in za.Entries)
+                {
+                    if (e.FullName.StartsWith("Saves/")) b.HasWorld = true;
+                    else if (e.FullName.StartsWith("db/")) b.HasAccounts = true;
+                    else if (e.FullName.StartsWith("Server/")) b.HasConfig = true;
+                }
+                var pz = za.GetEntry(PzReadme);
+                if (pz != null)
+                    using (var r = new StreamReader(pz.Open()))
+                    {
+                        string all = r.ReadToEnd();
+                        var t = Regex.Match(all, @"Backup time:\s*(\d{4}-\d\d-\d\d) at (\d\d:\d\d:\d\d)");
+                        DateTime when;
+                        if (t.Success && DateTime.TryParse(t.Groups[1].Value + " " + t.Groups[2].Value, out when)) b.Created = when;
+                        var wv = Regex.Match(all, @"World version in this backup is:\s*(\d+)");
+                        if (wv.Success) b.WorldVersion = wv.Groups[1].Value;
+                    }
+            }
+            if (byPz) b.Kind = new DirectoryInfo(System.IO.Path.GetDirectoryName(zip)).Name;   // startup, period or version
+            else
+            {
+                var m = Regex.Match(fi.Name, @"_([a-z\-]+)\.zip$");
+                b.Kind = m.Success ? (m.Groups[1].Value == "auto" ? "start / scheduled" : m.Groups[1].Value) : "";
+            }
+            return b;
+        }
+
+        // Everything restorable for this server: ezpz's zips in the backups folder and PZ's own in <data>\backups.
+        public static List<BackupInfo> ListAll(AppSettings s)
+        {
+            var list = new List<BackupInfo>();
+            if (Directory.Exists(s.BackupDir))
+                foreach (var f in Directory.GetFiles(s.BackupDir, s.ServerName + "_*.zip"))
+                    try { list.Add(Describe(f, false)); } catch { }
+            string pzDir = System.IO.Path.Combine(s.DataDir, "backups");
+            if (Directory.Exists(pzDir))
+                foreach (var f in Directory.GetFiles(pzDir, "backup_*.zip", SearchOption.AllDirectories))
+                {
+                    try
+                    {
+                        var b = Describe(f, true);
+                        if (b.Server == null || b.Server.Equals(s.ServerName, StringComparison.OrdinalIgnoreCase)) list.Add(b);
+                    }
+                    catch { }
+                }
+            return list.OrderByDescending(b => b.Created).ToList();
+        }
+
         // Caller must ensure the server is stopped and has taken a safety backup.
+        // Only replaces what the backup contains: a config-only backup leaves the world alone.
         public static void Restore(AppSettings s, string zip, Action<string> log)
         {
             string name = ServerNameIn(zip);
-            if (name == null) throw new Exception("Not an ezpz backup.");
-            if (name != s.ServerName) throw new Exception("This backup belongs to server '" + name + "'. Switch the server name on the Setup page to '" + name + "' first.");
+            if (name == null) throw new Exception("This doesn't look like an ezpz or Project Zomboid server backup.");
+            if (!name.Equals(s.ServerName, StringComparison.OrdinalIgnoreCase)) throw new Exception("This backup belongs to server '" + name + "'. Switch to that server first.");
+            var info = Describe(zip, false);
 
-            foreach (var p in new[] { s.SaveDir, s.DbPath }.Concat(s.ConfigFiles))
+            var clear = new List<string>();
+            if (info.HasWorld) clear.Add(s.SaveDir);
+            if (info.HasAccounts) clear.Add(s.DbPath);
+            if (info.HasConfig) clear.AddRange(s.ConfigFiles);
+            foreach (var p in clear)
                 if (Util.IsInside(p, s.DataDir)) Util.DeletePath(p);
 
-            string root = Path.GetFullPath(s.DataDir).TrimEnd('\\') + "\\";
+            string root = System.IO.Path.GetFullPath(s.DataDir).TrimEnd('\\') + "\\";
             int n = 0;
             using (var za = ZipFile.OpenRead(zip))
             {
                 foreach (var e in za.Entries)
                 {
-                    if (e.FullName == ManifestName || e.FullName == LegacyManifestName || e.FullName.EndsWith("/")) continue;
-                    string dest = Path.GetFullPath(Path.Combine(s.DataDir, e.FullName.Replace('/', '\\')));
+                    if (e.FullName.EndsWith("/")) continue;
+                    // only the server's own data; not ezpz/PZ notes or PZ's copy of options.ini
+                    if (!(e.FullName.StartsWith("Saves/") || e.FullName.StartsWith("db/") || e.FullName.StartsWith("Server/"))) continue;
+                    string dest = System.IO.Path.GetFullPath(System.IO.Path.Combine(s.DataDir, e.FullName.Replace('/', '\\')));
                     if (!dest.StartsWith(root, StringComparison.OrdinalIgnoreCase)) continue;
-                    Directory.CreateDirectory(Path.GetDirectoryName(dest));
+                    Directory.CreateDirectory(System.IO.Path.GetDirectoryName(dest));
                     using (var es = e.Open())
                     using (var fs = File.Create(dest))
                         es.CopyTo(fs);
                     n++;
                 }
             }
-            log("[backup] Restored " + n + " files from " + Path.GetFileName(zip));
+            log("[backup] Restored " + info.Contents + " (" + n + " files) from " + System.IO.Path.GetFileName(zip));
         }
-
         public static void PruneAuto(AppSettings s, Action<string> log)
         {
             if (!Directory.Exists(s.BackupDir) || s.KeepAutoBackups <= 0) return;
