@@ -71,7 +71,8 @@ namespace Ezpz
             p.Controls.Add(BuildPlayerActions());
 
             // --- server-wide row under the list
-            var bottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 50, Padding = new Padding(0, 10, 0, 0), WrapContents = false };
+            // sizes itself to the buttons and wraps when the window is narrow, so nothing gets cut off
+            var bottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, Padding = new Padding(0, 10, 0, 0), WrapContents = true };
             tbBroadcast = Theme.Box("");
             tbBroadcast.Width = 330;
             tbBroadcast.Margin = new Padding(0, 4, 8, 0);
@@ -98,7 +99,17 @@ namespace Ezpz
             lblPlayerCounts = new Label { AutoSize = true, ForeColor = Theme.Muted, Margin = new Padding(16, 9, 0, 0) };
             top.Controls.AddRange(new Control[] { refresh, chkAutoPlayers, chkShowOffline, lblPlayerCounts });
             p.Controls.Add(top);
-            p.Controls.Add(new Label { Text = "Players & Admin", Font = Theme.H1, Dock = DockStyle.Top, Height = 44, ForeColor = Theme.Text });
+            var title = new Label { Text = "Players & Admin", Font = Theme.H1, Dock = DockStyle.Top, Height = 44, ForeColor = Theme.Text };
+            p.Controls.Add(title);
+
+            // the character sheet shrinks on short windows so the player list always keeps some room
+            EventHandler fit = (s, e) =>
+            {
+                int room = p.ClientSize.Height - p.Padding.Vertical - title.Height - top.Height - bottom.Height;
+                sheetPanel.Height = Math.Max(150, Math.Min(330, room - 160));
+            };
+            p.Resize += fit;
+            bottom.SizeChanged += fit;
         }
 
         Control BuildPlayerActions()
