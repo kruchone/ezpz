@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Players: the give-item and spawn-vehicle boxes now suggest as you type. Type part of a name or ID ("fire axe", "ambulance") and pick from the list. It's read from the installed server's own script files and the enabled mods (with the mod's name shown), so it always matches your server's build. The chosen item's name shows under the box, and ezpz asks before sending an ID the server doesn't know.
+- Players: the action panel no longer needs a sideways scroll bar, and the player list's IP column fits the space left.
 - Logs: double-click a line with a location, or right-click it and choose View this spot on pzmap.org, to open that spot on the community map in your browser. Admin lines with decimal coordinates (such as spawned hordes) now show their location too.
 
 ## 1.1.0

@@ -16,7 +16,11 @@ namespace Ezpz
         Label lblPlayerCounts, lblSel;
         CheckBox chkAutoPlayers, chkShowOffline;
         ComboBox cbRole, cbTpTarget, cbPerk;
-        TextBox tbItem, tbVehicle, tbBroadcast;
+        TextBox tbBroadcast;
+        IdPicker itemPicker, vehiclePicker;
+        Label lblItemName, lblVehicleName;
+        ItemCatalog catalog = new ItemCatalog();
+        bool catalogLoading;
         NumericUpDown nItemCount, nXp, nHorde;
 
         Dictionary<string, PlayerInfo> roster = new Dictionary<string, PlayerInfo>(StringComparer.OrdinalIgnoreCase);
@@ -40,11 +44,18 @@ namespace Ezpz
                 Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, MultiSelect = false, HideSelection = false,
                 BackColor = Theme.Input, ForeColor = Theme.Text, BorderStyle = BorderStyle.None, Font = new Font("Segoe UI", 10.5f)
             };
-            lvPlayers.Columns.Add("Player", 150);
-            lvPlayers.Columns.Add("Role", 85);
-            lvPlayers.Columns.Add("Last seen", 125);
-            lvPlayers.Columns.Add("Steam ID", 150);
+            lvPlayers.Columns.Add("Player", 132);
+            lvPlayers.Columns.Add("Role", 80);
+            lvPlayers.Columns.Add("Last seen", 118);
+            lvPlayers.Columns.Add("Steam ID", 138);
             lvPlayers.Columns.Add("IP", 100);
+            // the IP column takes whatever width is left, so the list doesn't need a sideways scroll bar
+            lvPlayers.ClientSizeChanged += (s, e) =>
+            {
+                int used = 0;
+                for (int c = 0; c < lvPlayers.Columns.Count - 1; c++) used += lvPlayers.Columns[c].Width;
+                lvPlayers.Columns[lvPlayers.Columns.Count - 1].Width = Math.Max(90, lvPlayers.ClientSize.Width - used - 1);
+            };
             lvPlayers.SelectedIndexChanged += (s, e) => OnPlayerSelected();
             lvPlayers.ContextMenuStrip = BuildPlayerMenu();
             lvPlayers.MouseDown += (s, e) =>
@@ -92,7 +103,7 @@ namespace Ezpz
 
         Control BuildPlayerActions()
         {
-            var host = new Panel { Dock = DockStyle.Right, Width = 380, Padding = new Padding(16, 0, 0, 0), BackColor = Theme.Bg };
+            var host = new Panel { Dock = DockStyle.Right, Width = 390, Padding = new Padding(16, 0, 0, 0), BackColor = Theme.Bg };
             var f = new FlowLayoutPanel
             {
                 Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true,
@@ -128,21 +139,21 @@ namespace Ezpz
             Line(f, Btn("Send to them", (s, e) => Teleport(false)), Btn("Bring them here", (s, e) => Teleport(true)));
 
             Section(f, "Give");
-            tbItem = Theme.Box("Base.Axe");
-            tbItem.Width = 170; tbItem.Margin = new Padding(0, 4, 6, 6);
+            itemPicker = Picker(f, "Base.Axe", () => catalog.Items, GiveItem, out lblItemName);
             nItemCount = Theme.Num(1, 999, 1);
             nItemCount.Width = 60; nItemCount.Margin = new Padding(0, 4, 6, 6);
-            Line(f, tbItem, nItemCount, Btn("Give item", (s, e) => GiveItem()));
+            Line(f, Lbl("How many"), nItemCount, Btn("Give item", (s, e) => GiveItem()));
             cbPerk = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 170, BackColor = Theme.Input, ForeColor = Theme.Text, FlatStyle = FlatStyle.Flat, Margin = new Padding(0, 3, 6, 6) };
             cbPerk.Items.AddRange(GameData.Perks);
             cbPerk.SelectedItem = "Woodwork";
             nXp = Theme.Num(1, 100000, 100);
             nXp.Width = 70; nXp.Margin = new Padding(0, 4, 6, 6);
             Line(f, cbPerk, nXp, Btn("Give XP", (s, e) => PCmd("addxp \"{0}\" " + cbPerk.Text + "=" + nXp.Value)));
-            tbVehicle = Theme.Box("Base.VanAmbulance");
-            tbVehicle.Width = 236; tbVehicle.Margin = new Padding(0, 4, 6, 6);
-            Line(f, tbVehicle, Btn("Spawn vehicle", (s, e) => GiveVehicle()));
-            f.Controls.Add(Hint("Item and vehicle IDs look like Base.Axe or Base.PickUpTruck. A wrong ID just shows an error in the console."));
+            vehiclePicker = Picker(f, "Base.VanAmbulance", () => catalog.Vehicles, GiveVehicle, out lblVehicleName);
+            Line(f, Btn("Spawn vehicle", (s, e) => GiveVehicle()));
+            f.Controls.Add(Hint("Type part of a name or ID, like \"fire axe\" or \"ambulance\", and pick from the list. It comes from this server's own files and its enabled mods."));
+            f.Scroll += (s, e) => { itemPicker.Hide(); vehiclePicker.Hide(); };
+            f.MouseWheel += (s, e) => { itemPicker.Hide(); vehiclePicker.Hide(); };
 
             Section(f, "Trouble near them");
             nHorde = Theme.Num(1, 500, 25);
@@ -179,6 +190,52 @@ namespace Ezpz
         static Label Lbl(string t)
         {
             return new Label { Text = t, AutoSize = false, Size = new Size(90, 26), TextAlign = ContentAlignment.MiddleLeft, ForeColor = Theme.Text, Margin = new Padding(0, 0, 6, 6) };
+        }
+
+        // An item or vehicle box with suggestions, and the chosen entry's name under it.
+        IdPicker Picker(FlowLayoutPanel f, string text, Func<List<CatalogEntry>> source, Action submit, out Label name)
+        {
+            var p = new IdPicker(text) { Source = source };
+            p.Box.Width = 330;
+            p.Box.Margin = new Padding(0, 4, 0, 2);
+            p.Submit += submit;
+            var l = Hint("");
+            l.Margin = new Padding(0, 0, 0, 4);
+            p.Box.TextChanged += (s, e) => ShowPickedName(p, l);
+            f.Controls.Add(p.Box);
+            f.Controls.Add(l);
+            name = l;
+            return p;
+        }
+
+        void ShowPickedName(IdPicker p, Label l)
+        {
+            bool vehicle = p == vehiclePicker;
+            string id = p.Box.Text.Trim();
+            var c = vehicle ? catalog.FindVehicle(id) : catalog.FindItem(id);
+            if (id == "") l.Text = "";
+            else if (c != null) { l.Text = c.Name + (c.Source != "" ? "  ·  from " + c.Source : ""); l.ForeColor = Theme.Accent; }
+            else if ((vehicle ? catalog.Vehicles : catalog.Items).Count == 0) { l.Text = ""; }
+            else { l.Text = "Not a known " + (vehicle ? "vehicle" : "item") + " ID on this server."; l.ForeColor = Theme.Warn; }
+        }
+
+        // Reads the item and vehicle lists in the background when the install or the mod list changed.
+        void RefreshCatalog()
+        {
+            if (catalogLoading) return;
+            string key;
+            try { key = ItemCatalog.KeyFor(S); } catch { return; }
+            if (key == catalog.Key) return;
+            catalogLoading = true;
+            var settings = S;
+            Task.Run(() => ItemCatalog.Load(settings)).ContinueWith(t => Ui(() =>
+            {
+                catalogLoading = false;
+                if (t.Exception != null || settings != S) return;
+                catalog = t.Result;
+                ShowPickedName(itemPicker, lblItemName);
+                ShowPickedName(vehiclePicker, lblVehicleName);
+            }));
         }
 
         static Label Hint(string t)
@@ -467,16 +524,22 @@ namespace Ezpz
         void GiveItem()
         {
             if (!NeedSel()) return;
-            string id = tbItem.Text.Trim();
+            itemPicker.Hide();
+            string id = itemPicker.Box.Text.Trim();
+            if (id == "") { Warn("Type an item name or ID first."); return; }
             if (!id.Contains(".")) id = "Base." + id;
+            if (catalog.Items.Count > 0 && catalog.FindItem(id) == null && !Confirm(id + " isn't an item this server knows. Send it anyway?")) return;
             Cmd("additem \"" + Q(Sel) + "\" \"" + Q(id) + "\" " + nItemCount.Value);
         }
 
         void GiveVehicle()
         {
             if (!NeedSel()) return;
-            string id = tbVehicle.Text.Trim();
+            vehiclePicker.Hide();
+            string id = vehiclePicker.Box.Text.Trim();
+            if (id == "") { Warn("Type a vehicle name or ID first."); return; }
             if (!id.Contains(".")) id = "Base." + id;
+            if (catalog.Vehicles.Count > 0 && catalog.FindVehicle(id) == null && !Confirm(id + " isn't a vehicle this server knows. Send it anyway?")) return;
             Cmd("addvehicle \"" + Q(id) + "\" \"" + Q(Sel) + "\"");
         }
 

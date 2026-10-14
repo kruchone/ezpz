@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
 
@@ -229,6 +230,101 @@ namespace Ezpz
             l.Size = new Size(1, 30);
             l.Location = new Point(X, Y);
             Controls.Add(l);
+        }
+    }
+
+    // A text box that suggests catalog entries (items or vehicles) as you type: words can match the name or
+    // the id, Up/Down and Enter pick, Escape closes. The box always holds a plain id, so typing one still works.
+    class IdPicker
+    {
+        public readonly TextBox Box;
+        public Func<List<CatalogEntry>> Source = () => new List<CatalogEntry>();
+        public event Action Submit;    // Enter with no suggestion list open
+        ListBox list;
+        bool setting;
+
+        public IdPicker(string text)
+        {
+            Box = Theme.Box(text);
+            Box.TextChanged += (s, e) => { if (!setting) Suggest(); };
+            Box.KeyDown += OnKey;
+            Box.Leave += (s, e) => Box.BeginInvoke(new Action(() => { if (list != null && !list.Focused) Hide(); }));
+            Box.MouseWheel += (s, e) => Hide();
+        }
+
+        public void Hide() { if (list != null) list.Visible = false; }
+
+        void OnKey(object s, KeyEventArgs e)
+        {
+            bool open = list != null && list.Visible && list.Items.Count > 0;
+            if (e.KeyCode == Keys.Down && open) { list.SelectedIndex = Math.Min(list.Items.Count - 1, list.SelectedIndex + 1); e.Handled = true; }
+            else if (e.KeyCode == Keys.Up && open) { list.SelectedIndex = Math.Max(0, list.SelectedIndex - 1); e.Handled = true; }
+            else if (e.KeyCode == Keys.Escape && open) { Hide(); e.Handled = e.SuppressKeyPress = true; }
+            else if (e.KeyCode == Keys.Enter)
+            {
+                e.Handled = e.SuppressKeyPress = true;
+                if (open && list.SelectedIndex >= 0) Choose((CatalogEntry)list.SelectedItem);
+                else if (Submit != null) Submit();
+            }
+        }
+
+        void Choose(CatalogEntry c)
+        {
+            setting = true;
+            Box.Text = c.Id;
+            Box.SelectionStart = Box.Text.Length;
+            setting = false;
+            Hide();
+            Box.Focus();
+        }
+
+        void Suggest()
+        {
+            var form = Box.FindForm();
+            if (form == null) return;
+            var found = ItemCatalog.Search(Source(), Box.Text, 40);
+            if (found.Count == 0 || (found.Count == 1 && string.Equals(found[0].Id, Box.Text.Trim(), StringComparison.OrdinalIgnoreCase))) { Hide(); return; }
+            if (list == null)
+            {
+                list = new ListBox
+                {
+                    DrawMode = DrawMode.OwnerDrawFixed, ItemHeight = 24, BackColor = Theme.Card, ForeColor = Theme.Text,
+                    BorderStyle = BorderStyle.FixedSingle, IntegralHeight = false, TabStop = false, Visible = false, Font = Theme.Base
+                };
+                list.DrawItem += DrawEntry;
+                list.MouseClick += (s, e) => { int i = list.IndexFromPoint(e.Location); if (i >= 0) Choose((CatalogEntry)list.Items[i]); };
+                list.Leave += (s, e) => { if (!Box.Focused) Hide(); };
+                form.Controls.Add(list);
+            }
+            list.BeginUpdate();
+            list.Items.Clear();
+            foreach (var c in found) list.Items.Add(c);
+            list.SelectedIndex = 0;
+            list.EndUpdate();
+            // under the box, kept inside the window
+            var at = form.PointToClient(Box.PointToScreen(new Point(0, Box.Height + 1)));
+            int w = Math.Max(Box.Width, 400), h = list.ItemHeight * Math.Min(10, found.Count) + 4;
+            if (at.X + w > form.ClientSize.Width - 8) at.X = Math.Max(0, form.ClientSize.Width - 8 - w);
+            if (at.Y + h > form.ClientSize.Height - 4) at.Y = Math.Max(0, at.Y - Box.Height - 2 - h);
+            list.Bounds = new Rectangle(at, new Size(w, h));
+            list.Visible = true;
+            list.BringToFront();
+        }
+
+        void DrawEntry(object s, DrawItemEventArgs e)
+        {
+            if (e.Index < 0) return;
+            var c = (CatalogEntry)list.Items[e.Index];
+            bool sel = (e.State & DrawItemState.Selected) != 0;
+            using (var b = new SolidBrush(sel ? Theme.AccentBtn : Theme.Card)) e.Graphics.FillRectangle(b, e.Bounds);
+            string right = c.Id + (c.Source != "" ? "  ·  " + c.Source : "");
+            var rs = TextRenderer.MeasureText(right, Theme.Base);
+            int rw = Math.Min(rs.Width, e.Bounds.Width / 2);
+            var rr = new Rectangle(e.Bounds.Right - rw - 6, e.Bounds.Top, rw, e.Bounds.Height);
+            var lr = new Rectangle(e.Bounds.Left + 6, e.Bounds.Top, e.Bounds.Width - rw - 18, e.Bounds.Height);
+            var flags = TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
+            TextRenderer.DrawText(e.Graphics, c.Name, Theme.Base, lr, Theme.Text, flags);
+            TextRenderer.DrawText(e.Graphics, right, Theme.Base, rr, sel ? Theme.Text : Theme.Muted, flags | TextFormatFlags.Right);
         }
     }
 }

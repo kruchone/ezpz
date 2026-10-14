@@ -28,6 +28,7 @@ namespace Ezpz
                     feed.Poll(S, out rebuilt);
                 }),
                 Step("Loading mods", () => RefreshMods(false)),
+                Step("Loading item and vehicle names", () => { catalog = ItemCatalog.Load(S); ShowPickedName(itemPicker, lblItemName); ShowPickedName(vehiclePicker, lblVehicleName); }),
                 Step("Loading world rules (sandbox)", () => RefreshSandbox(false)),
                 Step("Reading the world's radio and memory history", () =>
                 {

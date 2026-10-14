@@ -184,7 +184,7 @@ namespace Ezpz
             if (i == PMods) RefreshMods(false);
             if (i == PHome) RefreshHome();
             if (i == PLogs) LoadLogs(false);
-            if (i == PPlayers) RefreshPlayers(true);
+            if (i == PPlayers) { RefreshPlayers(true); RefreshCatalog(); }
             if (i == PWorld) RefreshWorld();
             if (i == PDiscord) RefreshDiscord();
             if (i == PBackups) RefreshBackupList();
