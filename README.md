@@ -87,6 +87,12 @@ This produces `ezpz.exe`. To rebuild while a copy is running, pass another name:
 
 The source is plain C# 5 / WinForms in `src\`. For development, `ezpz.exe --page N` opens on page N, and setting the `EZPZ_HOME` environment variable makes ezpz use a different settings folder, which is handy for testing against a throwaway server.
 
+## Develop builds and branches
+
+- **Stable:** the [latest release](../../releases/latest). Use this for your server.
+- **Develop:** the [Develop build](../../releases/tag/develop-build) pre-release, rebuilt on every change to the `develop` branch. It has the newest features and may have bugs. Its version (shown in the title bar) looks like `1.1.0-dev.12+a8414f3`: the upcoming version, the build number and the commit. Keep backups.
+
+Branches: `main` holds released code, and releases are tagged `vX.Y.Z`. `develop` collects work for the next release. New features are built on `feature/<name>` branches off `develop` and merged back into `develop` through a pull request. Every push and pull request is built automatically.
 ## Disclaimer
 
 ezpz is an unofficial community tool. It is not affiliated with or endorsed by The Indie Stone. Project Zomboid is a trademark of The Indie Stone. Use at your own risk, and keep backups.

@@ -1,19 +1,38 @@
 name: build
 
+# main          -> stable code; releases come from tags like v1.1.0
+# develop       -> next version; every push updates the "Develop build" pre-release
+# feature/*, PRs -> build check only (exe attached to the workflow run)
 on:
   push:
-    branches: [main]
+    branches: [main, develop, 'feature/**']
     tags: ['v*']
   pull_request:
 
 permissions:
   contents: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+
+      # Non-release builds get a version like 1.1.0-dev.12+a8414f3, shown in ezpz's title bar.
+      - name: Stamp development version
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+        shell: pwsh
+        run: |
+          $f = 'src/AssemblyInfo.cs'
+          $suffix = '-dev.${{ github.run_number }}+' + '${{ github.sha }}'.Substring(0, 7)
+          $c = Get-Content $f -Raw
+          $c = [regex]::Replace($c, 'AssemblyInformationalVersion\("([^"]+)"\)', { param($m) 'AssemblyInformationalVersion("' + $m.Groups[1].Value + $suffix + '")' })
+          Set-Content $f $c -NoNewline
+          Select-String -Path $f -Pattern 'InformationalVersion'
 
       - name: Build ezpz.exe
         shell: cmd
@@ -24,10 +43,35 @@ jobs:
           name: ezpz
           path: ezpz.exe
 
-      # Pushing a tag like v1.0.0 publishes a GitHub release with ezpz.exe attached.
+      # Pushing a tag like v1.1.0 publishes a normal release with ezpz.exe attached.
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: ezpz.exe
           generate_release_notes: true
+
+      # Every push to develop moves the develop-build tag and refreshes one rolling pre-release.
+      - name: Move develop-build tag
+        if: github.ref == 'refs/heads/develop'
+        shell: pwsh
+        run: |
+          git tag -f develop-build
+          git push -f origin develop-build
+
+      - name: Publish develop build
+        if: github.ref == 'refs/heads/develop'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: develop-build
+          name: Develop build (unstable)
+          prerelease: true
+          make_latest: false
+          files: ezpz.exe
+          body: |
+            The latest build of the `develop` branch: features headed for the next release. It may have bugs, so keep backups.
+
+            Commit: ${{ github.sha }}
+            Built: run #${{ github.run_number }}
+
+            For the stable version, use the [latest release](https://github.com/${{ github.repository }}/releases/latest).
