@@ -21,8 +21,28 @@ namespace Ezpz
             Application.SetCompatibleTextRenderingDefault(false);
             Application.ThreadException += (s, e) =>
                 MessageBox.Show("Unexpected error:\n\n" + e.Exception.Message, "ezpz", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            var f = new MainForm();
-            if (args.Length == 2 && args[0] == "--page") f.StartPage = int.Parse(args[1]);
+            string serverName = "";
+            try { serverName = AppSettings.Load().ServerName; } catch { }
+            var splash = Splash.Start(serverName);
+
+            MainForm f;
+            try
+            {
+                splash.Step("Building the window…", 2);
+                f = new MainForm();
+                if (args.Length == 2 && args[0] == "--page") f.StartPage = int.Parse(args[1]);
+                var handle = f.Handle;   // create the window (not shown yet) so background work can report back to it
+            }
+            catch (Exception ex)
+            {
+                splash.Fatal(ex);
+                return;
+            }
+
+            var problems = f.Preload(splash.Step);
+            if (problems.Count > 0 && !splash.ShowProblems(problems)) return;
+
+            f.Shown += (s, e) => { splash.Close(); f.Activate(); };
             Application.Run(f);
         }
     }

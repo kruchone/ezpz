@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Splash screen at startup. ezpz preloads every page behind it (players, character sheets, mods, the Sandbox editor, server config, Discord, radio, memory history, backups, firewall), so pages open instantly. The Sandbox page went from a 2.5 s freeze on first open to about 50 ms. Anything that fails to load is listed in plain words, with Continue, Copy details and Quit, and saved to `startup.log`. The server is never started by this.
 - Character sheets on the Players page: days survived, deaths, last position, skills by group with levels, and recent level-ups (from PZ's PerkLog), plus per-player network traffic from the metrics server while they're online.
 - Far less noise in the server's logs: Home's live tiles now read Project Zomboid's built-in metrics server, every 5 seconds and with nothing logged, instead of sending `stats` commands every 10 seconds. Who is online, including Discord join and leave alerts, comes from the server's connection log instead of polling `players`.
 - The firewall step also blocks inbound TCP to the server's Java from other machines, keeping the metrics and RCON ports private. Players only use UDP.

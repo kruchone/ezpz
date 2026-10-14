@@ -83,6 +83,7 @@ Only paths inside the data folder that belong to the current server ID are ever 
 | SteamCMD | `C:\PZServer\steamcmd` |
 | Server data (saves, config, accounts, logs), passed to the server as `-cachedir` | `C:\PZServer\data` |
 | Backups | `C:\PZServer\backups` |
+| Startup problems | `%APPDATA%\ezpz\startup.log` (anything that failed to load behind the splash screen) |
 | ezpz settings | One file per server in `%APPDATA%\ezpz\servers\`, and `%APPDATA%\ezpz\ezpz.ini` for the active server. Admin passwords are encrypted with Windows DPAPI. |
 
 All of these can be changed on the Setup page.
