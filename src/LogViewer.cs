@@ -34,7 +34,7 @@ namespace Ezpz
         static readonly Regex ChatMsg = new Regex(@"Got message:ChatMessage\{chat=([^,]*), author='([^']*)', text='(.*)'\}");
         static readonly Regex Alert = new Regex(@"Server alert message: '(.*)' sent");
         static readonly Regex Quoted = new Regex("\"([^\"]{1,40})\"");
-        static readonly Regex Pos = new Regex(@"(-?\d+),(-?\d+),(-?\d+)");
+        static readonly Regex Pos = new Regex(@"(?<![\d.])-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?(?:,-?\d+)?(?![\d.])");   // x,y[,z], sometimes with decimals
         static readonly Regex Safety = new Regex("Safety: \"([^\"]+)\" \\(([^)]*)\\) (store|restore) (true|false)");
         static readonly Regex UserLine = new Regex("^\\d+ \"([^\"]+)\" (.*?)\\.?$");
         static readonly Regex ConsoleCmd = new Regex("command entered via (server console \\(System\\.in\\)|RCON[^:]*|[^:]+): \"(.*)\"");

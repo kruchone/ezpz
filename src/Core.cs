@@ -374,6 +374,22 @@ namespace Ezpz
 
     public static class Util
     {
+        static readonly Regex MapXY = new Regex(@"(-?\d+)(?:\.\d+)?\s*,\s*(-?\d+)");
+
+        // pzmap.org link for a game position like "10622,9722,0" or "10612.4,9701.8"; null if there's none
+        public static string MapUrl(string where)
+        {
+            var m = MapXY.Match(where ?? "");
+            return m.Success ? "https://pzmap.org/?" + m.Groups[1].Value + "x" + m.Groups[2].Value : null;
+        }
+
+        // Opens a web page in the default browser.
+        public static void OpenUrl(string url)
+        {
+            try { System.Diagnostics.Process.Start(url); }
+            catch (Exception ex) { System.Windows.Forms.MessageBox.Show("Couldn't open " + url + ": " + ex.Message, "ezpz"); }
+        }
+
         // Windows command-line quoting (MSVCRT rules) for arguments passed to java.exe
         public static string QuoteArg(string a)
         {

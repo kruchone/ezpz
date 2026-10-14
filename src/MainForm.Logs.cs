@@ -48,6 +48,7 @@ namespace Ezpz
             lvLogs.RetrieveVirtualItem += (s, e) => e.Item = MakeLogItem(logShown[e.ItemIndex]);
             lvLogs.SelectedIndexChanged += (s, e) => ShowLogDetail();
             lvLogs.ContextMenuStrip = BuildLogMenu();
+            lvLogs.DoubleClick += (s, e) => OpenLogOnMap();
             lvLogs.MouseDown += (s, e) =>
             {
                 if (e.Button != MouseButtons.Right) return;
@@ -102,7 +103,7 @@ namespace Ezpz
 
             p.Controls.Add(new Label
             {
-                Text = "Who said or did what, and when, from the server's own logs. Right-click a line for more.",
+                Text = "Who said or did what, and when, from the server's own logs. Double-click a line with a location to see it on pzmap.org; right-click for more.",
                 Dock = DockStyle.Top, Height = 26, ForeColor = Theme.Muted
             });
             p.Controls.Add(new Label { Text = "Logs", Font = Theme.H1, Dock = DockStyle.Top, Height = 44, ForeColor = Theme.Text });
@@ -139,10 +140,20 @@ namespace Ezpz
                 int i = logShown.IndexOf(x);
                 if (i >= 0) { lvLogs.SelectedIndices.Clear(); lvLogs.SelectedIndices.Add(i); lvLogs.EnsureVisible(i); }
             });
+            var map = m.Items.Add("View this spot on pzmap.org", null, (s, e) => OpenLogOnMap());
+            m.Opening += (s, e) => { var x = SelectedLog(); map.Enabled = x != null && Util.MapUrl(x.Where) != null; };
             m.Items.Add(new ToolStripSeparator());
             m.Items.Add("Copy line", null, (s, e) => { var x = SelectedLog(); if (x != null) Clipboard.SetText(x.Raw); });
             m.Items.Add("Open the log file", null, (s, e) => { var x = SelectedLog(); if (x != null) Process.Start("notepad.exe", Util.QuoteArg(x.File)); });
             return m;
+        }
+
+        // Opens the selected line's location on the community map in the default browser.
+        void OpenLogOnMap()
+        {
+            var x = SelectedLog();
+            var url = x == null ? null : Util.MapUrl(x.Where);
+            if (url != null) Util.OpenUrl(url);
         }
 
         LogEntry SelectedLog()
