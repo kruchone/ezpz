@@ -139,7 +139,9 @@ namespace Ezpz
             {
                 if ((CoveredByStatus & kv.Key) == 0) continue;
                 string label = DcEvents.First(x => x.Key == kv.Key).Value;
-                kv.Value.Enabled = !live;
+                // locked rather than disabled: Windows draws disabled check boxes in a dark grey that's unreadable here
+                kv.Value.AutoCheck = !live;
+                kv.Value.ForeColor = live ? Theme.Muted : Theme.Text;
                 kv.Value.Text = live ? label + "  (shown in the live status message instead)" : label;
             }
         }
