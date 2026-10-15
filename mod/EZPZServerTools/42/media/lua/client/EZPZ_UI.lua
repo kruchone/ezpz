@@ -446,7 +446,7 @@ function EZPZ.refresh()
                 if wipe >= 0 then parts[#parts + 1] = "wipe in " .. clock(wipe) end
             end
             show = true
-        elseif wipe >= 0 and wipe < 3 * 86400 then
+        elseif wipe >= 0 and wipe < 7 * 86400 then   -- a week's notice
             parts[#parts + 1] = "Wipe in " .. clock(wipe)
             show = true
         end
