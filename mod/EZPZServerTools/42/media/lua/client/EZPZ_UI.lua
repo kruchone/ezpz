@@ -2,8 +2,8 @@
 -- The server half sends each player their state every few seconds (see EZPZ_Server.lua): countdowns to the
 -- next restart and wipe, the season ladder, THE END IS NEAR, and reward notices. This file draws it:
 --   * a bar just above the hotbar with the countdowns (red during THE END IS NEAR); click it for the season panel
---   * a one-time THE END IS NEAR banner
---   * the season panel: your rank and categories, and the top 5
+--   * a one-time THE END IS NEAR banner, above the bar
+--   * the season panel (above the bar): your rank and categories, and the top 5
 --   * a reward notice when a reward from last season arrives
 -- Admins and moderators also get an "EZPZ Server Tools" button in the game's Admin panel. It opens a preview
 -- pane: each panel can be shown with sample data to check how it looks. Previews are local to that admin's screen.
@@ -388,7 +388,10 @@ function EZPZ.showBanner(sub)
     b.shownAt = getTimestampMs()
     b:setWidth(math.max(520, textW(UIFont.Large, "THE END IS NEAR") + 80, textW(UIFont.Medium, sub) + 60))
     b:setX((screenW() - b.width) / 2)
-    b:setY(screenH() * 0.22)
+    -- above the bar (and the season panel, if it's open), so everything grows up from the hotbar
+    local top = barY(EZPZ.ui.bar.height)
+    if EZPZ.ui.season:isVisible() then top = EZPZ.ui.season:getY() end
+    b:setY(top - b.height - 10)
     b:setVisible(true)
     b:bringToTop()
 end
@@ -495,7 +498,7 @@ function EZPZ.refresh()
         ui.season:setWidth(w2)
         ui.season:setHeight(h)
         ui.season:setX((screenW() - w2) / 2)
-        ui.season:setY((screenH() - h) / 2)   -- centre of the screen
+        ui.season:setY(ui.bar.y - h - 6)   -- stacks upward from the bar
     end
     ui.season:setVisible(open)
 
