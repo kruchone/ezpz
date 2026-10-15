@@ -46,7 +46,7 @@ namespace Ezpz
                 Step("Checking Windows Firewall", () => firewallOk = CheckFirewall()),
                 // Windows only creates a control's on-screen window the first time it's shown, which is what made
                 // big pages (Sandbox has ~1,100 controls) freeze on first open. Create them all now, behind the splash.
-                Step("Preparing pages", () => { CreateHandles(this); foreach (Control pg in content.Controls) pg.PerformLayout(); }),
+                Step("Reticulating splines", () => { CreateHandles(this); foreach (Control pg in content.Controls) pg.PerformLayout(); }),
             };
 
             for (int i = 0; i < steps.Count; i++)
