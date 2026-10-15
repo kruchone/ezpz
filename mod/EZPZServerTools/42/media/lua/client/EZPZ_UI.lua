@@ -1,7 +1,7 @@
 -- EZPZ Server Tools, on-screen panels.
 -- The server half sends each player their state every few seconds (see EZPZ_Server.lua): countdowns to the
 -- next restart and wipe, the season ladder, THE END IS NEAR, and reward notices. This file draws it:
---   * a bar at the top of the screen with the countdowns (red during THE END IS NEAR); click it for the season panel
+--   * a bar just above the hotbar with the countdowns (red during THE END IS NEAR); click it for the season panel
 --   * a one-time THE END IS NEAR banner
 --   * the season panel: your rank and categories, and the top 5
 --   * a reward notice when a reward from last season arrives
@@ -105,7 +105,7 @@ end
 EZPZBar = ISPanel:derive("EZPZBar")
 
 function EZPZBar:new()
-    local o = ISPanel:new(0, 6, 300, fontH(UIFont.Small) + 10)
+    local o = ISPanel:new(0, 0, 300, fontH(UIFont.Medium) + 12)
     setmetatable(o, self)
     self.__index = self
     o.background = true
@@ -131,7 +131,7 @@ end
 function EZPZBar:render()
     local r, g, b = 0.92, 0.92, 0.92
     if self.red then r, g, b = 1, 0.85, 0.85 end
-    self:drawTextCentre(self.text, self.width / 2, 5, r, g, b, 1, UIFont.Small)
+    self:drawTextCentre(self.text, self.width / 2, 6, r, g, b, 1, UIFont.Medium)
 end
 
 function EZPZBar:onMouseUp(x, y)
@@ -373,6 +373,14 @@ function EZPZ.refreshAdmin() if EZPZ.ui.admin then EZPZ.ui.admin:update() end en
 local function screenW() return getCore():getScreenWidth() end
 local function screenH() return getCore():getScreenHeight() end
 
+-- Just above the player's hotbar (or near the bottom of the screen if there isn't one).
+local function barY(h)
+    local hb = try(function() return getPlayerHotbar(0) end)
+    local top = hb and try(function() return hb:getY() end)
+    if not top or top <= 0 then top = screenH() - 60 end
+    return top - h - 8
+end
+
 function EZPZ.showBanner(sub)
     local b = EZPZ.ui.banner
     if not b then return end
@@ -466,9 +474,10 @@ function EZPZ.refresh()
     ui.bar.text = text
     ui.bar.red = red
     ui.bar.clickable = s ~= nil and s.season ~= nil and s.season > 0
-    local w = textW(UIFont.Small, text) + 28
+    local w = textW(UIFont.Medium, text) + 36
     ui.bar:setWidth(w)
     ui.bar:setX((screenW() - w) / 2)
+    ui.bar:setY(barY(ui.bar.height))
     ui.bar:setVisible(show)
 
     if ui.banner:isVisible() and getTimestampMs() - ui.banner.shownAt > 10000 then ui.banner:setVisible(false) end
@@ -486,7 +495,7 @@ function EZPZ.refresh()
         ui.season:setWidth(w2)
         ui.season:setHeight(h)
         ui.season:setX((screenW() - w2) / 2)
-        ui.season:setY(ui.bar.y + ui.bar.height + 6)
+        ui.season:setY(ui.bar.y - h - 6)   -- opens upward from the bar
     end
     ui.season:setVisible(open)
 

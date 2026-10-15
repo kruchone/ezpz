@@ -7,7 +7,7 @@ A small Build 42 mod that pairs with ezpz. It adds no items and changes nothing 
   ezpz reads. Deaths (with the killer, when it was another player) are appended to `Lua\ezpz_events.json`, one JSON
   object per line, for PvP on the season ladder.
 - **For players:** ezpz writes `Lua\ezpz_season.txt` (countdowns, the season ladder, reward notices). The server half
-  reads it every 5 seconds and sends each player what their screen needs: a bar at the top with the restart and wipe
+  reads it every 5 seconds and sends each player what their screen needs: a bar above the hotbar with the restart and wipe
   countdowns (red during THE END IS NEAR), a one-time THE END IS NEAR banner, the season panel (click the bar), and a
   reward notice.
 - **For admins:** an **EZPZ Server Tools** button in the game's Admin panel opens a preview pane that shows each panel with sample data, on
