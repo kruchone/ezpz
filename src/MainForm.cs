@@ -155,9 +155,9 @@ namespace Ezpz
             new object[] { PPlayers, "Players" }, new object[] { PMap, "Map" }, new object[] { PConsole, "Console" },
             new object[] { PLogs, "Logs" }, new object[] { PPerf, "Performance" },
             new object[] { -1, "WORLD" },
-            new object[] { PWorld, "Events & weather" }, new object[] { PSandbox, "World rules" }, new object[] { PMods, "Mods" },
+            new object[] { PWorld, "Events & weather" }, new object[] { PSandbox, "World rules" },
             new object[] { -1, "SERVER" },
-            new object[] { PConfig, "Settings" }, new object[] { PDiscord, "Discord" }, new object[] { PBackups, "Backups" },
+            new object[] { PConfig, "Settings" }, new object[] { PMods, "Mods" }, new object[] { PDiscord, "Discord" }, new object[] { PBackups, "Backups" },
             new object[] { PReset, "Reset & wipes" }, new object[] { PSetup, "Setup" },
         };
 
