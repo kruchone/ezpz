@@ -100,7 +100,7 @@ namespace Ezpz
             logData = new LogViewerData(); logAll = new List<LogEntry>(); logLoadedAt = DateTime.MinValue;
             FilterLogs();   // empties the Logs list too, so it doesn't point past the new (empty) data
             LoadDiscordState();
-            live = null; localMods = new List<ModEntry>();
+            live = null; localMods = new List<ModEntry>(); mapLoadedFor = null;
             chars = new Dictionary<string, CharacterSheet>(StringComparer.OrdinalIgnoreCase); traffic = null; trafficAt = DateTime.MinValue;
             dbChars = new Dictionary<string, ServerDb.Character>(StringComparer.OrdinalIgnoreCase); tickets = new List<ServerDb.Ticket>(); bans = new List<ServerDb.Ban>(); UpdateModerationButtons();
             playersBaseline = false; notifiedBuild = null; healthNotifiedRun = DateTime.MinValue; lastNotifiedState = ServerState.Stopped;

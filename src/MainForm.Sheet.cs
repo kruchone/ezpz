@@ -80,7 +80,7 @@ namespace Ezpz
             // character name, alive or dead, and last saved position from the world save
             Task.Run(() => ServerDb.ReadCharacters(settings)).ContinueWith(t =>
             {
-                if (t.Exception == null) Ui(() => { if (settings == S) { dbChars = t.Result; UpdateSheet(); } });
+                if (t.Exception == null) Ui(() => { if (settings == S) { dbChars = t.Result; UpdateSheet(); if (currentPage == PMap) RefreshMapMarkers(); } });
             });
         }
 

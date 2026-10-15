@@ -29,6 +29,7 @@ ezpz is a single `.exe` with no installer and no dependencies. It installs the d
 - **[Console](https://github.com/kruchone/ezpz/wiki/Console):** the live server console, crash recovery and scheduled restarts with in-game warnings.
 - **[Logs](https://github.com/kruchone/ezpz/wiki/Logs):** one searchable timeline of chat, admin actions, PvP, joins and level-ups.
 - **[Players & Admin](https://github.com/kruchone/ezpz/wiki/Players-and-Admin):** roles, moderation, admin powers, item and vehicle pickers, character sheets, help tickets and bans.
+- **[Map](https://github.com/kruchone/ezpz/wiki/Map):** the whole world from the server's own map images, with players on it.
 - **[World & Weather](https://github.com/kruchone/ezpz/wiki/World-and-Weather):** rain, storms, lightning and world events, and the emergency radio frequency.
 - **[Discord](https://github.com/kruchone/ezpz/wiki/Discord):** chat bridge, notifications, a live status message, daily summaries, slash commands and whitelist requests.
 - **[Backups](https://github.com/kruchone/ezpz/wiki/Backups) and [Reset](https://github.com/kruchone/ezpz/wiki/Reset):** scheduled backups with one-click restore, and safe resets from "new world" to "factory reset".

@@ -75,6 +75,7 @@ namespace Ezpz
             BuildLogs();
             BuildHome();
             BuildPlayers();
+            BuildMap();
             BuildWorld();
             BuildDiscord();
             BuildBackups();
@@ -146,7 +147,7 @@ namespace Ezpz
 
         void BuildNav()
         {
-            string[] names = { "Home", "Setup", "Configure", "Sandbox", "Mods", "Console", "Logs", "Players & Admin", "World & Weather", "Discord", "Backups", "Reset" };
+            string[] names = { "Home", "Setup", "Configure", "Sandbox", "Mods", "Console", "Logs", "Players & Admin", "Map", "World & Weather", "Discord", "Backups", "Reset" };
             int y = 14;
             for (int i = 0; i < names.Length; i++)
             {
@@ -161,7 +162,7 @@ namespace Ezpz
                 b.Click += (s, e) => ShowPage(idx);
                 nav.Controls.Add(b);
                 navButtons.Add(b);
-                y += i == PHome ? 48 : 39;
+                y += i == PHome ? 48 : 37;
             }
             navButtons[PReset].ForeColor = Theme.Danger;
             lblNavData = new Label { Text = "Data:\n" + S.DataDir, ForeColor = Theme.Muted, AutoSize = true, MaximumSize = new Size(200, 0), Location = new Point(14, y + 20) };
@@ -169,7 +170,7 @@ namespace Ezpz
         }
 
         // Page numbers, in nav order.
-        const int PHome = 0, PSetup = 1, PConfig = 2, PSandbox = 3, PMods = 4, PConsole = 5, PLogs = 6, PPlayers = 7, PWorld = 8, PDiscord = 9, PBackups = 10, PReset = 11;
+        const int PHome = 0, PSetup = 1, PConfig = 2, PSandbox = 3, PMods = 4, PConsole = 5, PLogs = 6, PPlayers = 7, PMap = 8, PWorld = 9, PDiscord = 10, PBackups = 11, PReset = 12;
 
         public int StartPage;
         int currentPage = -1;
@@ -177,7 +178,7 @@ namespace Ezpz
         {
             if (i != currentPage && !LeaveCheck()) return;
             currentPage = i;
-            Control[] all = { pgHome, pgSetup, pgConfig, pgSandbox, pgMods, pgConsole, pgLogs, pgPlayers, pgWorld, pgDiscord, pgBackups, pgReset };
+            Control[] all = { pgHome, pgSetup, pgConfig, pgSandbox, pgMods, pgConsole, pgLogs, pgPlayers, pgMap, pgWorld, pgDiscord, pgBackups, pgReset };
             for (int k = 0; k < all.Length; k++)
             {
                 all[k].Visible = k == i;
@@ -188,6 +189,7 @@ namespace Ezpz
             if (i == PSandbox) RefreshSandbox(false);
             if (i == PMods) RefreshMods(false);
             if (i == PHome) RefreshHome();
+            if (i == PMap) OnMapShown();
             if (i == PLogs) LoadLogs(false);
             if (i == PPlayers) { RefreshPlayers(true); RefreshCatalog(); }
             if (i == PWorld) RefreshWorld();

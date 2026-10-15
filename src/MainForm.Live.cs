@@ -72,6 +72,7 @@ namespace Ezpz
         void RefreshLive()
         {
             if (currentPage == PPlayers) UpdateSheetLive();
+            if (currentPage == PMap) RefreshMapMarkers();
             if (lvLive == null) return;
             lvLive.BeginUpdate();
             lvLive.Items.Clear();
