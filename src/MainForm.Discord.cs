@@ -48,7 +48,7 @@ namespace Ezpz
             Step(p, "1.  Open the Discord Developer Portal and click New Application. Name it after your server.", "Discord Developer Portal", "https://discord.com/developers/applications");
             Step(p, "2.  In the Bot tab, click Reset Token, then Copy, and paste it into Bot token below. Treat it like a password: anyone with it controls the bot.", null, null);
             Step(p, "3.  Still in the Bot tab, under Privileged Gateway Intents, turn on Message Content Intent and click Save. Without it, chat from Discord can't reach the game.", null, null);
-            Step(p, "4.  In OAuth2 → URL Generator, tick the scopes \"bot\" and \"applications.commands\", then the permissions View Channels, Send Messages and Read Message History. Open the generated link, pick your Discord server and click Authorize.", null, null);
+            Step(p, "4.  In OAuth2 → URL Generator, tick the scopes \"bot\" and \"applications.commands\", then the permissions View Channels, Send Messages, Read Message History and Embed Links. Open the generated link, pick your Discord server and click Authorize.", null, null);
             Step(p, "5.  In your Discord server, create text channels for the bridge (for example pz-chat, pz-log and pz-commands) and type their names below exactly, without the #. Make the commands channel visible to admins only: messages there run as server commands.", null, null);
             Step(p, "6.  Save, click Check setup, then restart the server.", null, null);
             p.Y += 6;
