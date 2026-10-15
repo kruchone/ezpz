@@ -23,25 +23,26 @@ ezpz is a single `.exe` with no installer and no dependencies. It installs the d
 ## Features
 
 - **[Guided setup](https://github.com/kruchone/ezpz/wiki/Setup):** install and update the server through SteamCMD, create its config, open the firewall.
-- **[Home](https://github.com/kruchone/ezpz/wiki/Home-Page):** status, quick actions, server updates, memory health, and live numbers from the game.
-- **[Configure](https://github.com/kruchone/ezpz/wiki/Configure) and [Sandbox](https://github.com/kruchone/ezpz/wiki/Sandbox):** every server setting and world rule, in plain forms.
+- **[Home](https://github.com/kruchone/ezpz/wiki/Home-Page):** one screen with status, what needs attention, and who's on.
+- **[Performance](https://github.com/kruchone/ezpz/wiki/Performance):** server updates, memory health, and live numbers from the game.
+- **[Settings](https://github.com/kruchone/ezpz/wiki/Settings) and [World rules](https://github.com/kruchone/ezpz/wiki/World-Rules):** every server setting and world rule, in plain forms.
 - **[Mods](https://github.com/kruchone/ezpz/wiki/Mods):** paste Workshop links, pick what loads and in what order, and restart automatically when a mod updates.
 - **[Console](https://github.com/kruchone/ezpz/wiki/Console):** the live server console, crash recovery and scheduled restarts with in-game warnings.
 - **[Logs](https://github.com/kruchone/ezpz/wiki/Logs):** one searchable timeline of chat, admin actions, PvP, joins and level-ups.
-- **[Players & Admin](https://github.com/kruchone/ezpz/wiki/Players-and-Admin):** roles, moderation, admin powers, item and vehicle pickers, character sheets, help tickets and bans.
+- **[Players](https://github.com/kruchone/ezpz/wiki/Players):** roles, moderation, admin powers, item and vehicle pickers, character sheets, help tickets and bans.
 - **[Map](https://github.com/kruchone/ezpz/wiki/Map):** the whole world from the server's own map images, with players on it.
-- **[World & Weather](https://github.com/kruchone/ezpz/wiki/World-and-Weather):** rain, storms, lightning and world events, and the emergency radio frequency.
+- **[Events & weather](https://github.com/kruchone/ezpz/wiki/Events-and-Weather):** rain, storms, lightning and world events, and the emergency radio frequency.
 - **[Discord](https://github.com/kruchone/ezpz/wiki/Discord):** chat bridge, notifications, a live status message, daily summaries, slash commands and whitelist requests.
-- **[Backups](https://github.com/kruchone/ezpz/wiki/Backups) and [Reset](https://github.com/kruchone/ezpz/wiki/Reset):** scheduled backups with one-click restore, safe resets from "new world" to "factory reset", and scheduled wipes (a fresh world every month, with warnings).
+- **[Backups](https://github.com/kruchone/ezpz/wiki/Backups) and [Reset & wipes](https://github.com/kruchone/ezpz/wiki/Reset-and-Wipes):** scheduled backups with one-click restore, safe resets from "new world" to "factory reset", and scheduled wipes (a fresh world every month, with warnings).
 - **[Several servers](https://github.com/kruchone/ezpz/wiki/Several-Servers):** keep more than one server and switch between them.
 - **[EZPZ Server Tools](https://github.com/kruchone/ezpz/wiki/EZPZ-Server-Tools)** (optional mod, in development): see each player's health, injuries and moodles live.
 
 | | |
 |---|---|
-| ![Players & Admin, with a character sheet](docs/screenshots/players.png) | ![Logs](docs/screenshots/logs.png) |
+| ![Players, with a character sheet](docs/screenshots/players.png) | ![Logs](docs/screenshots/logs.png) |
 | ![Mods](docs/screenshots/mods.png) | ![Sandbox](docs/screenshots/sandbox.png) |
 | ![Backups](docs/screenshots/backups.png) | ![Console](docs/screenshots/console.png) |
-| ![World & Weather](docs/screenshots/world.png) | ![Discord](docs/screenshots/discord.png) |
+| ![Events & weather](docs/screenshots/world.png) | ![Discord](docs/screenshots/discord.png) |
 | ![Setup](docs/screenshots/setup.png) | ![Reset](docs/screenshots/reset.png) |
 
 ## Requirements
@@ -56,7 +57,7 @@ You don't need Project Zomboid, Steam, a Steam account or administrator rights o
 
 1. Download `ezpz.exe` from the [latest release](https://github.com/kruchone/ezpz/releases/latest) and run it.
 2. Follow the **Setup** page from top to bottom.
-3. Adjust **Configure**, then press **Start**.
+3. Adjust **Settings**, then press **Start**.
 4. For players outside your home network, forward UDP 16261–16262 on your router.
 
 The [Getting Started guide](https://github.com/kruchone/ezpz/wiki/Getting-Started) covers each step.
