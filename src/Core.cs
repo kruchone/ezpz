@@ -37,6 +37,17 @@ namespace Ezpz
         public string SummaryTime = "23:59";           // when the daily summary posts (local time)
         public bool FirstStartDone = false;            // the server has started for real at least once (setup's last step)
         public bool WizardPending = false;             // show the setup wizard (new servers)
+        public bool SeasonsEnabled = false;            // seasons and the ladder (needs scheduled wipes; see Ladder)
+        public string SeasonWeights = "30,20,20,10,10,10,0";   // Endurance, Skills, Slayer, Explorer, Resilience, Final Stand, PvP
+        public int SeasonMinHours = 3;                 // hours played to qualify
+        public int SeasonKillCap = 300;                // kills per hour played that count
+        public bool SeasonExcludeStaff = true;
+        public bool SeasonExcludeCheats = true;        // god mode, invisibility, no-clip
+        public bool SeasonShowLadder = true;           // players see standings mid-season
+        public int SeasonEndHours = 24;                // THE END IS NEAR: real hours before the season-ending wipe
+        public int SeasonWeeklyDay = 0;                // weekly Discord standings: 0 = Sunday
+        public string SeasonWeeklyTime = "20:00";
+        public string SeasonRewards = "Base.Medal_Gold;Base.Medal_Silver;Base.Medal_Bronze;Base.TrophyGold";   // 1st, 2nd, 3rd, each title
         public bool WipeEnabled = false;               // scheduled wipes (see WipeSchedule)
         public int WipeRepeat = 0;                     // 0 = every month on WipeDay, 1 = every WipeWeeks weeks on WipeWeekday
         public int WipeDay = 1;                        // 1-28
