@@ -16,7 +16,7 @@ namespace Ezpz
             var steps = new List<KeyValuePair<string, Action>>
             {
                 Step("Checking whether the server is already running", () => server.DetectExisting()),
-                Step("Reading the server's settings", () => { LoadConfig(); RefreshDiscord(); }),
+                Step("Reading the server's settings", () => { LoadConfig(); LoadDiscordState(); RefreshDiscord(); }),
                 Step("Loading players", () =>
                 {
                     roster = GameData.ReadRoster(S);

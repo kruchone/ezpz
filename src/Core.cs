@@ -34,6 +34,10 @@ namespace Ezpz
         public int ModCheckMinutes = 10;
         public string DiscordWebhookProtected = "";   // encrypted like the admin password
         public int DiscordEvents = 0x7F;               // DiscordEvent flags to post
+        public string SummaryTime = "23:59";           // when the daily summary posts (local time)
+        public bool DiscordBotEnable = false;          // ezpz's own bot connection: commands and whitelist requests
+        public string DiscordAdminRole = "";           // role name allowed to run admin commands (besides Administrators)
+        public string DiscordRequestChannel = "";      // channel name where whitelist requests are posted for admins
 
         // Which profile file this is (a property, so it isn't written into the file).
         public string ProfileId { get; set; }

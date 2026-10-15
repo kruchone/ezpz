@@ -97,7 +97,11 @@ namespace Ezpz
             chkShowOffline.Margin = new Padding(8, 8, 8, 0);
             chkShowOffline.CheckedChanged += (s, e) => RebuildPlayerList();
             lblPlayerCounts = new Label { AutoSize = true, ForeColor = Theme.Muted, Margin = new Padding(16, 9, 0, 0) };
-            top.Controls.AddRange(new Control[] { refresh, chkAutoPlayers, chkShowOffline, lblPlayerCounts });
+            btnRequests = Theme.Btn("Whitelist requests", Color.FromArgb(150, 110, 30));
+            btnRequests.Margin = new Padding(16, 0, 0, 0);
+            btnRequests.Visible = false;
+            btnRequests.Click += (s, e) => ShowRequests();
+            top.Controls.AddRange(new Control[] { refresh, chkAutoPlayers, chkShowOffline, lblPlayerCounts, btnRequests });
             p.Controls.Add(top);
             var title = new Label { Text = "Players & Admin", Font = Theme.H1, Dock = DockStyle.Top, Height = 44, ForeColor = Theme.Text };
             p.Controls.Add(title);

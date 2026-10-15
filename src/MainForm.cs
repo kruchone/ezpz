@@ -1032,6 +1032,7 @@ namespace Ezpz
         void OnCrash()
         {
             lastCrashAt = DateTime.Now;
+            dstate.Day.Crashes++;
             if (!S.AutoRestart)
             {
                 Log("[ezpz] Server stopped unexpectedly. Auto-restart is off.");

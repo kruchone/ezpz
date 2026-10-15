@@ -99,6 +99,7 @@ namespace Ezpz
             feed.Reset();
             logData = new LogViewerData(); logAll = new List<LogEntry>(); logLoadedAt = DateTime.MinValue;
             FilterLogs();   // empties the Logs list too, so it doesn't point past the new (empty) data
+            LoadDiscordState();
             chars = new Dictionary<string, CharacterSheet>(StringComparer.OrdinalIgnoreCase); traffic = null; trafficAt = DateTime.MinValue;
             playersBaseline = false; notifiedBuild = null; healthNotifiedRun = DateTime.MinValue; lastNotifiedState = ServerState.Stopped;
             modsOutdated = new List<string>(); modsMissing = new List<string>();
