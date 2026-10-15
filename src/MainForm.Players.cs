@@ -101,7 +101,15 @@ namespace Ezpz
             btnRequests.Margin = new Padding(16, 0, 0, 0);
             btnRequests.Visible = false;
             btnRequests.Click += (s, e) => ShowRequests();
-            top.Controls.AddRange(new Control[] { refresh, chkAutoPlayers, chkShowOffline, lblPlayerCounts, btnRequests });
+            btnTickets = Theme.Btn("Tickets");
+            btnTickets.Margin = new Padding(8, 0, 0, 0);
+            btnTickets.Visible = false;
+            btnTickets.Click += (s, e) => ShowTickets();
+            btnBans = Theme.Btn("Bans");
+            btnBans.Margin = new Padding(8, 0, 0, 0);
+            btnBans.Visible = false;
+            btnBans.Click += (s, e) => ShowBans();
+            top.Controls.AddRange(new Control[] { refresh, chkAutoPlayers, chkShowOffline, lblPlayerCounts, btnRequests, btnTickets, btnBans });
             p.Controls.Add(top);
             var title = new Label { Text = "Players & Admin", Font = Theme.H1, Dock = DockStyle.Top, Height = 44, ForeColor = Theme.Text };
             p.Controls.Add(title);
@@ -301,6 +309,7 @@ namespace Ezpz
             {
                 lastLogRead = DateTime.Now;
                 LoadCharacters();
+                RefreshBans();
                 Task.Run(() => GameData.ReadRoster(S)).ContinueWith(t =>
                 {
                     if (t.Exception == null) Ui(() => { roster = t.Result; RebuildPlayerList(); });

@@ -458,14 +458,23 @@ namespace Ezpz
             using (var sha = SHA256.Create()) return Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(s ?? ""))).Substring(0, 12);
         }
 
-        // When ezpz closes, the status message would go stale; say so.
+        // On exit: the window is already gone; disconnect the bot and mark the status message stale, in parallel and
+        // off the UI thread (waiting on the UI thread for a network call that needs it was what made closing hang).
         void DiscordShutdown()
         {
-            if (bot != null) bot.Stop();
+            Hide();
             SaveDiscordState();
-            if (!DiscordWants(DiscordEvent.Status) || dstate.StatusMessageId == "" || dstate.StatusWebhook != Hash(S.DiscordWebhook)) return;
-            var embed = DiscordWebhook.Embed(ServerTitle(), "**⚪ Status unknown**\nezpz was closed at " + DateTime.Now.ToString("HH:mm") + ", so this isn't being updated.", 0x99AAB5, "Live status · ezpz · " + S.ServerName);
-            try { DiscordWebhook.Edit(S.DiscordWebhook, dstate.StatusMessageId, embed).Wait(3000); } catch { }
+            var work = new List<Task>();
+            var b = bot;
+            bot = null;
+            if (b != null) work.Add(Task.Run(() => b.Stop(true)));
+            if (DiscordWants(DiscordEvent.Status) && dstate.StatusMessageId != "" && dstate.StatusWebhook == Hash(S.DiscordWebhook))
+            {
+                var embed = DiscordWebhook.Embed(ServerTitle(), "**⚪ Status unknown**\nezpz was closed at " + DateTime.Now.ToString("HH:mm") + ", so this isn't being updated.", 0x99AAB5, "Live status · ezpz · " + S.ServerName);
+                string url = S.DiscordWebhook, id = dstate.StatusMessageId;
+                work.Add(Task.Run(() => DiscordWebhook.Edit(url, id, embed)));
+            }
+            try { Task.WaitAll(work.ToArray(), 3000); } catch { }
         }
 
         // ================================================================== daily summary

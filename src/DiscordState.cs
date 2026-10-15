@@ -36,6 +36,7 @@ namespace Ezpz
         public List<WhitelistRequest> Requests = new List<WhitelistRequest>();
         public Dictionary<string, int> Milestones = new Dictionary<string, int>();   // lower-case name -> days announced for this character
         public DayStats Day = new DayStats();
+        public long TicketSeenId = -1;   // newest ticket already announced (-1: not looked yet)
 
         static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         static string PathFor(string profileId) { return Path.Combine(AppSettings.ManagerDir, "servers", profileId + ".discord.json"); }

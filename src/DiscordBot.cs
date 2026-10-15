@@ -52,10 +52,15 @@ namespace Ezpz
             Task.Run(() => Loop(ct));
         }
 
-        public void Stop()
+        // graceful: tell Discord the bot is leaving (it shows offline right away) before dropping the connection.
+        public void Stop(bool graceful = false)
         {
-            if (cts != null) cts.Cancel();
             var w = ws;
+            if (graceful && w != null && w.State == WebSocketState.Open)
+            {
+                try { w.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "ezpz closing", CancellationToken.None).Wait(1500); } catch { }
+            }
+            if (cts != null) cts.Cancel();
             if (w != null) try { w.Abort(); } catch { }
             Connected = false;
         }

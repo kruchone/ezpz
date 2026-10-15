@@ -30,6 +30,7 @@ namespace Ezpz
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Updates, "Game or mod update available"),
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Players, "Players joining and leaving"),
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Health, "Memory problems"),
+            new KeyValuePair<DiscordEvent, string>(DiscordEvent.Tickets, "New tickets (help requests players file in game)"),
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Deaths, "Player deaths"),
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Milestones, "Survival milestones (7, 14, 30, 60, 100, 180 and 365 days)"),
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Status, "A live status message that edits itself (online, players, uptime). Replaces the online, stopped and join posts"),
@@ -422,6 +423,7 @@ namespace Ezpz
             DayTick();
             if (ticks % 10 == 5) PerkTick();
             if (ticks % 5 == 3) StatusTick();
+            if (ticks % 30 == 20) TicketTick();
             if (S.DiscordWebhook == "" || server.State != ServerState.Running) return;
             if (DiscordWants(DiscordEvent.Health) && ticks % 60 == 0)
             {

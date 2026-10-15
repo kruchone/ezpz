@@ -24,6 +24,9 @@ namespace Ezpz
                     perkNames = Characters.LoadNames(S.InstallDir);
                     perkNamesFor = S.InstallDir;
                     chars = Characters.Read(S);
+                    dbChars = ServerDb.ReadCharacters(S);
+                    bans = ServerDb.ReadBans(S);
+                    tickets = ServerDb.ReadTickets(S);
                     bool rebuilt;
                     feed.Poll(S, out rebuilt);
                 }),

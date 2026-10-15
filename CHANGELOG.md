@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Players: **Tickets**. The help requests players file from the game's ticket window now show on the Players page (a Tickets button appears when there are any). Read them, answer them (the player sees the answer in game) or delete them. New tickets are logged, flash the taskbar, and can be posted to Discord.
+- Players: **Bans**. A Bans button lists banned accounts, Steam IDs and IP addresses with the reason, read from the server's database, and unbans with one click while the server runs.
+- Character sheets show the character's in-game name, whether they're alive, and their last saved position from the world save, with the position linking to pzmap.org.
+- Closing ezpz no longer pauses for a few seconds when the Discord bot or live status message is on. The window closes at once while ezpz disconnects the bot properly and marks the status message as no longer updating.
 - Players: the list now includes every account in the server's database, so whitelisted players who haven't joined yet show up as "never joined", and roles changed while someone was offline show correctly. It reads the database read-only with the SQLite library built into Windows 10 and 11.
 - Discord commands through ezpz's own connection, using the chat bridge's bot: `/status` for everyone; `/start`, `/restart` (with an in-game warning, 5 minutes by default) and `/backup` for admins (Discord administrators, or a role you name). The new **Invite bot** button on the Discord page builds the invite link from the bot token (scopes `bot` and `applications.commands`; View Channels, Send Messages, Read Message History and Embed Links), opens it and copies it.
 - Whitelist requests from Discord: players use `/whitelist <username>`. Admins approve or deny with buttons in a requests channel, or on the Players page (a "Whitelist requests" button appears when there are any). Approving creates the account with a random password and the bot sends it to the player privately; if their DMs are closed, the approver gets it to pass on.

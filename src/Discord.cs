@@ -25,6 +25,7 @@ namespace Ezpz
         Summary = 256,      // daily summary
         Deaths = 512,
         Milestones = 1024,  // "Rick has survived 30 days"
+        Tickets = 2048,     // a player filed a ticket in game
     }
 
     // Posts to a Discord webhook. One message at a time, honouring Discord's rate limits.
