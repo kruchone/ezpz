@@ -89,6 +89,7 @@ namespace Ezpz
             detectTimer.Interval = 1000;
             detectTimer.Tick += (s, e) => OnSecond();
             detectTimer.Start();
+            FormClosed += (s, e) => { detectTimer.Stop(); uiTimer.Stop(); };   // no ticks while the window is torn down
 
             Shown += (s, e) =>
             {
@@ -1062,6 +1063,7 @@ namespace Ezpz
 
         void OnSecond()
         {
+            if (IsDisposed || Disposing || closingConfirmed && !Visible) return;   // a last tick while the window closes
             ticks++;
             if (!server.Attached)
             {

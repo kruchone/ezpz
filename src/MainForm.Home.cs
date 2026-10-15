@@ -248,11 +248,12 @@ namespace Ezpz
                 nextRestart,
                 SteamCmd.InstalledBuildId(S) ?? "—",
             };
+            if (glanceTiles.IsDisposed || glanceTiles.Controls.Count < values.Length) return;
             for (int i = 0; i < values.Length; i++)
             {
                 var v = (Label)glanceTiles.Controls[i].Controls[0];
                 v.Text = values[i];
-                v.Font = values[i].Length > 9 ? Theme.H2 : new Font("Segoe UI Semibold", 15f);
+                v.Font = values[i].Length > 9 ? Theme.H2 : TileFont;
                 v.ForeColor = i == 2 && modProblems > 0 ? Theme.Warn : Theme.Text;
             }
         }
@@ -352,6 +353,8 @@ namespace Ezpz
         }
 
         // ---------- live stats tiles
+
+        static readonly Font TileFont = new Font("Segoe UI Semibold", 15f);
 
         Control MakeTile(string caption)
         {

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fixed: switching servers while on the Map page showed an error, and closing ezpz could show one from a last Home page refresh. Home also no longer creates a new font every second.
 - New **Map** page: the whole world, drawn from the map images in the server install (no internet or game needed), with players on it. Online players move live with EZPZ Server Tools; everyone else shows at their last saved position, and dead characters in red. Drag, scroll to zoom, find a player or go to coordinates, and right-click for pzmap.org.
 - Live player condition, with the new **EZPZ Server Tools** mod (in `mod/`, not on the Workshop yet): Home has a "Players right now" list with each online player's health, injuries (bites, scratches, bleeding, deep wounds, fractures, burns, infection), moodles with levels, hunger, thirst and tiredness, and where they are or what they're driving. The character sheet shows the same for the selected player. Each player's game reports every 10 seconds; nothing in the game is changed.
 - Mods page: mods in the server's own mods folder (`<data>\mods`) are listed as **Local** instead of Missing, noting that players need their own copy (servers only hand out Workshop mods). Their items also show in the item picker.

@@ -89,7 +89,7 @@ namespace Ezpz
         {
             foreach (var l in layers) try { l.Zip.Dispose(); } catch { }
             layers.Clear();
-            foreach (var img in cache.Values) img.Dispose();
+            foreach (var img in cache.Values) if (img != null) img.Dispose();   // null = no image for that spot
             cache.Clear(); lru.Clear();
         }
 
