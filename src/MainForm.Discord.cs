@@ -32,7 +32,7 @@ namespace Ezpz
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Health, "Memory problems"),
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Deaths, "Player deaths"),
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Milestones, "Survival milestones (7, 14, 30, 60, 100, 180 and 365 days)"),
-            new KeyValuePair<DiscordEvent, string>(DiscordEvent.Status, "A live status message that updates itself (online, players, uptime) instead of new posts"),
+            new KeyValuePair<DiscordEvent, string>(DiscordEvent.Status, "A live status message that edits itself (online, players, uptime). Replaces the online, stopped and join posts"),
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Summary, "A daily summary: peak players, who played, zombies killed, deaths, uptime"),
         };
 
@@ -100,6 +100,8 @@ namespace Ezpz
                 p.Y += 26;
                 dcEventChecks[ev.Key] = c;
             }
+            // with the live status message on, online / stopped / joins and leaves are shown there instead
+            dcEventChecks[DiscordEvent.Status].CheckedChanged += (s, e) => ShowCoveredByStatus();
             p.Y += 4;
             tbSummaryTime = p.Row("Daily summary time", Theme.Box(""), 70);
             p.Hint("24-hour time on this PC, like 23:59. Deaths and milestones need the server's PerkLogs setting on (it is by default).");
@@ -127,6 +129,18 @@ namespace Ezpz
             p.P("Whitelist requests only apply when the server isn't open to everyone (Open=false on the Configure page). Approving one creates the account with a random password, and the bot sends it to the player privately.");
             p.End();
             FormClosed += (s, e) => DiscordShutdown();
+        }
+
+        void ShowCoveredByStatus()
+        {
+            bool live = dcEventChecks[DiscordEvent.Status].Checked;
+            foreach (var kv in dcEventChecks)
+            {
+                if ((CoveredByStatus & kv.Key) == 0) continue;
+                string label = DcEvents.First(x => x.Key == kv.Key).Value;
+                kv.Value.Enabled = !live;
+                kv.Value.Text = live ? label + "  (shown in the live status message instead)" : label;
+            }
         }
 
         void Step(Page p, string text, string linkText, string url)
@@ -167,6 +181,7 @@ namespace Ezpz
             tbWebhook.Text = S.DiscordWebhook;
             foreach (var kv in dcEventChecks) kv.Value.Checked = (S.DiscordEvents & (int)kv.Key) != 0;
             tbSummaryTime.Text = S.SummaryTime;
+            ShowCoveredByStatus();
             chkBotEnable.Checked = S.DiscordBotEnable;
             tbAdminRole.Text = S.DiscordAdminRole;
             tbReqChannel.Text = S.DiscordRequestChannel;
@@ -344,7 +359,14 @@ namespace Ezpz
 
         // ---------- posting events
 
-        bool DiscordWants(DiscordEvent ev) { return S.DiscordWebhook != "" && (S.DiscordEvents & (int)ev) != 0; }
+        // The live status message already shows online / offline and who's playing, so those don't also get their own posts.
+        const DiscordEvent CoveredByStatus = DiscordEvent.Online | DiscordEvent.Stopped | DiscordEvent.Players;
+
+        bool DiscordWants(DiscordEvent ev)
+        {
+            if (S.DiscordWebhook == "" || (S.DiscordEvents & (int)ev) == 0) return false;
+            return (CoveredByStatus & ev) == 0 || (S.DiscordEvents & (int)DiscordEvent.Status) == 0;
+        }
 
         DateTime lastDiscordError = DateTime.MinValue;
 
