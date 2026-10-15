@@ -55,7 +55,7 @@ namespace Ezpz
             if (busy != null) { Warn("Please wait: " + busy); return; }
             if (!LeaveCheck()) return;
             if (modsDirty && !Confirm("You have unsaved changes on the Mods page. Discard them and switch servers?")) return;
-            if (SandboxDirty && !Confirm("You have unsaved changes on the Sandbox page. Discard them and switch servers?")) return;
+            if (SandboxDirty && !Confirm("You have unsaved changes on the World rules page. Discard them and switch servers?")) return;
             if (server.State != ServerState.Stopped)
             {
                 if (!Confirm("\"" + S.ServerName + "\" is running. Only one server runs at a time.\n\nStop it (saving the world) and switch?")) return;

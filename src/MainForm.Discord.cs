@@ -128,7 +128,7 @@ namespace Ezpz
             saveBot2.Click += (s, e) => SaveDiscordAll();
             p.Buttons(saveBot2);
             lblBotState = Fixed(p, 40, Theme.Muted);
-            p.P("Whitelist requests only apply when the server isn't open to everyone (Open=false on the Configure page). Approving one creates the account with a random password, and the bot sends it to the player privately.");
+            p.P("Whitelist requests only apply when the server isn't open to everyone (\"Anyone can join\" off on the Settings page). Approving one creates the account with a random password, and the bot sends it to the player privately.");
             p.End();
             FormClosed += (s, e) => DiscordShutdown();
         }

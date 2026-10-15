@@ -15,28 +15,32 @@ namespace Ezpz
         ListView lvLive;
         Label lblLiveNote, lblSheetLive;
 
-        void BuildLiveSection(Page p)
+        // Home's "Players right now": each online player's condition, from EZPZ Server Tools.
+        Control BuildLiveSection()
         {
-            p.H2("Players right now");
+            var box = new Panel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = new Padding(0, 0, 16, 0) };
             lvLive = new ListView
             {
-                Size = new Size(Page.Wide, 130), View = View.Details, FullRowSelect = true, MultiSelect = false, HideSelection = false,
+                Dock = DockStyle.Fill, View = View.Details, FullRowSelect = true, MultiSelect = false, HideSelection = false,
                 BackColor = Theme.Input, ForeColor = Theme.Text, BorderStyle = BorderStyle.None, Font = new Font("Segoe UI", 9.75f),
                 ShowItemToolTips = true,   // hovering a row shows everything, since long lists get cut off in the columns
             };
-            lvLive.Columns.Add("Player", 120);
-            lvLive.Columns.Add("Health", 60);
-            lvLive.Columns.Add("Injuries", 170);
-            lvLive.Columns.Add("Moodles", 230);
-            lvLive.Columns.Add("Needs", 200);
-            lvLive.Columns.Add("Where", 110);
+            lvLive.Columns.Add("Player", 105);
+            lvLive.Columns.Add("Health", 55);
+            lvLive.Columns.Add("Injuries", 150);
+            lvLive.Columns.Add("Moodles", 170);
+            lvLive.Columns.Add("Where", 100);
             lvLive.DoubleClick += (s, e) => { var u = LiveSelectedMapUrl(); if (u != null) Util.OpenUrl(u); };
             var menu = new ContextMenuStrip();
             menu.Items.Add("Open on the Players page", null, (s, e) => { if (lvLive.SelectedItems.Count == 1) ShowPlayer((string)lvLive.SelectedItems[0].Tag); });
+            menu.Items.Add("Show on the Map page", null, (s, e) => { if (lvLive.SelectedItems.Count == 1) { var n = (string)lvLive.SelectedItems[0].Tag; ShowPage(PMap); MapFind(n); } });
             menu.Items.Add("View this spot on pzmap.org", null, (s, e) => { var u = LiveSelectedMapUrl(); if (u != null) Util.OpenUrl(u); });
             lvLive.ContextMenuStrip = menu;
-            p.Add(lvLive, 134);
-            lblLiveNote = Fixed(p, 24, Theme.Muted);
+            box.Controls.Add(lvLive);
+            lblLiveNote = new Label { Dock = DockStyle.Bottom, Height = 40, ForeColor = Theme.Muted, Padding = new Padding(0, 6, 0, 0) };
+            box.Controls.Add(lblLiveNote);
+            box.Controls.Add(new Label { Text = "Players right now", Dock = DockStyle.Top, Height = 30, Font = Theme.H2, ForeColor = Theme.Accent });
+            return box;
         }
 
         string LiveSelectedMapUrl()
@@ -83,7 +87,7 @@ namespace Ezpz
                 {
                     var it = new ListViewItem(new[]
                     {
-                        lp.Username, LiveFeed.HealthText(lp), LiveFeed.InjuryText(lp), LiveFeed.MoodleText(lp), LiveFeed.NeedsText(lp),
+                        lp.Username, LiveFeed.HealthText(lp), LiveFeed.InjuryText(lp), LiveFeed.MoodleText(lp),
                         lp.Vehicle != "" ? VehicleName(lp.Vehicle) : (int)lp.X + ", " + (int)lp.Y,
                     }) { Tag = lp.Username, UseItemStyleForSubItems = false };
                     it.ToolTipText = lp.Username + ": " + LiveFeed.HealthText(lp) + " health\n" + LiveFeed.InjuryText(lp) + "\n" + LiveFeed.MoodleText(lp) + "\n" + LiveFeed.NeedsText(lp);
@@ -101,7 +105,7 @@ namespace Ezpz
             if (server.State != ServerState.Running) lblLiveNote.Text = "Shown while the server is running.";
             else if (live == null) lblLiveNote.Text = "Add the EZPZ Server Tools mod (Mods page) to see each player's health, injuries and moodles here.";
             else if (!live.Fresh) lblLiveNote.Text = "No report from EZPZ Server Tools since " + live.Written.ToString("HH:mm:ss") + ". Is it still in the server's mod list?";
-            else lblLiveNote.Text = live.Players.Count == 0 ? "Nobody online." : "Reported by each player's game every 10 seconds. Double-click a player to see where they are.";
+            else lblLiveNote.Text = live.Players.Count == 0 ? "Nobody online." : "Hover a player for everything; double-click to see where they are; right-click for more.";
         }
 
         string VehicleName(string script)

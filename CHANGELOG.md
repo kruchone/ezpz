@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- **A tidier menu.** Pages are grouped by job, without numbers: Home; **Live** (Players, Map, Console, Logs, Performance); **World** (Events & weather, World rules, Mods); **Server** (Settings, Discord, Backups, Reset & wipes, Setup). Configure is now **Settings**, Sandbox **World rules**, World & Weather **Events & weather**, Players & Admin **Players**, and Reset **Reset & wipes**.
+- **Home fits on one screen:** status and quick actions, a **Needs attention** list (unfinished setup, whitelist requests, unanswered tickets, server and mod updates, mod problems, memory trouble, a disconnected Discord bot, a wipe within 24 hours), each with a button to deal with it, then players right now beside eight server tiles (players, FPS, zombies, memory, next restart, next wipe, last backup, EBS). Tiles open the page they summarise.
+- New **Performance** page: server version and updates, the memory verdict and chart, the game's full live numbers, this PC and problems, moved from Home.
 - **Scheduled wipes** (Reset page): reset the server every month on a chosen day, or every few weeks on a chosen weekday, at a set time, with the New world, Fresh map keep characters, or New world + wipe accounts preset. Players are warned in game 24 hours, 1 hour, 15, 5 and 1 minute before; a new Discord notification warns 3 days, 1 day and 1 hour before and says when the fresh world is up. A backup is always made first, and if it fails the wipe is cancelled and the server comes back as it was. The next wipe shows in `/status` and the live status message.
 - The ezpz log no longer repeats the same server-database error every 30 seconds.
 - Fixed: switching servers while on the Map page showed an error, and closing ezpz could show one from a last Home page refresh. Home also no longer creates a new font every second.

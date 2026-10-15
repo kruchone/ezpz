@@ -87,7 +87,7 @@ namespace Ezpz
                 Text = "World rules: zombies, loot, time, XP and more. Changes take effect when the server restarts, and some (like loot) only affect parts of the map nobody has visited yet. Saving keeps the previous file as a .bak copy.",
                 Dock = DockStyle.Top, Height = 44, ForeColor = Theme.Muted
             });
-            p.Controls.Add(new Label { Text = "Sandbox", Font = Theme.H1, Dock = DockStyle.Top, Height = 44, ForeColor = Theme.Text });
+            p.Controls.Add(new Label { Text = "World rules", Font = Theme.H1, Dock = DockStyle.Top, Height = 44, ForeColor = Theme.Text });
         }
 
         void RefreshSandbox(bool force)

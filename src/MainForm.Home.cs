@@ -16,11 +16,12 @@ namespace Ezpz
     // PZ's own "stats <group> all" command, PC resources and crash signs.
     public partial class MainForm
     {
-        Page pgHome;
+        Panel pgHome;
+        Page pgPerf;
+        FlowLayoutPanel attention, homeTiles;
         Label lblHomeStatus, lblHomeSub, lblUpdate;
         Button btnUpdateNow;
         TextBox tbHomeBroadcast;
-        FlowLayoutPanel glanceTiles;
         string latestBuild, updateError;
         bool checkingUpdate;
         DateTime lastUpdateCheck = DateTime.MinValue;
@@ -54,41 +55,59 @@ namespace Ezpz
             new[] { "memory-used", "Java memory now" },
         };
 
-        static readonly string[] Glance = { "EBS radio", "Mods on", "Mod problems", "Last backup", "Next restart", "Server build" };
 
+        // Home: one screen that answers "is the server OK, and who's on?". Everything about tuning and the
+        // details behind the numbers is on the Performance page.
         void BuildHome()
         {
-            var p = pgHome = NewPage();
+            var p = new Panel { Dock = DockStyle.Fill, BackColor = Theme.Bg, Visible = false, Padding = new Padding(28, 16, 28, 12), AutoScroll = true };
+            content.Controls.Add(p);
+            pgHome = p;
 
-            // ---- status
-            lblHomeStatus = new Label { AutoSize = true, Font = new Font("Segoe UI Semibold", 26f), ForeColor = Theme.Muted, Text = "● Stopped" };
-            p.Add(lblHomeStatus, 50);
-            lblHomeSub = Fixed(p, 48, Theme.Text);
+            // ---- players and server tiles, side by side (fills the rest)
+            var cols = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, BackColor = Color.Transparent, Padding = new Padding(0, 8, 0, 0), MinimumSize = new Size(0, 260) };
+            cols.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            cols.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 332));
+            cols.Controls.Add(BuildLiveSection(), 0, 0);
+            cols.Controls.Add(BuildHomeTiles(), 1, 0);
+            p.Controls.Add(cols);
+
+            // ---- needs attention (grows with what's in it)
+            attention = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, FlowDirection = FlowDirection.TopDown, WrapContents = false, BackColor = Color.Transparent, Padding = new Padding(0, 6, 0, 4) };
+            p.Controls.Add(attention);
+
+            // ---- quick actions
+            var actions = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true, BackColor = Color.Transparent };   // wraps on narrow windows
             var save = Theme.Btn("Save world");
             save.Click += (s, e) => Cmd("save");
             var backup = Theme.Btn("Back up now");
             backup.Click += async (s, e) => await BackupFlow("manual");
-            var console = Theme.Btn("Open console");
-            console.Click += (s, e) => ShowPage(PConsole);
-            p.Buttons(save, backup, console);
-            tbHomeBroadcast = p.Row("Message all players", Theme.Box(""), 460);
+            tbHomeBroadcast = Theme.Box("");
+            tbHomeBroadcast.Width = 300;
+            tbHomeBroadcast.Margin = new Padding(16, 6, 6, 0);
             tbHomeBroadcast.KeyDown += (s, e) => { if (e.KeyCode == Keys.Enter) { HomeBroadcast(); e.SuppressKeyPress = true; } };
+            var cue = new Label { Text = "Message all players:", AutoSize = true, ForeColor = Theme.Muted, Margin = new Padding(16, 9, 0, 0) };
             var send = Theme.Btn("Send", Theme.AccentBtn);
-            send.Margin = new Padding(0);
-            send.Location = new Point(Page.X + Page.LabelW + 470, tbHomeBroadcast.Top - 4);
             send.Click += (s, e) => HomeBroadcast();
-            p.Controls.Add(send);
+            actions.Controls.AddRange(new Control[] { save, backup, cue, tbHomeBroadcast, send });
+            p.Controls.Add(actions);
 
-            BuildLiveSection(p);
+            // ---- status
+            lblHomeSub = new Label { Dock = DockStyle.Top, Height = 46, ForeColor = Theme.Text, UseMnemonic = false };
+            p.Controls.Add(lblHomeSub);
+            lblHomeStatus = new Label { Dock = DockStyle.Top, Height = 50, Font = new Font("Segoe UI Semibold", 24f), ForeColor = Theme.Muted, Text = "● Stopped" };
+            p.Controls.Add(lblHomeStatus);
+        }
 
-            // ---- at a glance (facts from the other pages)
-            p.H2("At a glance");
-            glanceTiles = new FlowLayoutPanel { Size = new Size(Page.Wide, 76), WrapContents = true, BackColor = Color.Transparent };
-            foreach (var g in Glance) glanceTiles.Controls.Add(MakeTile(g));
-            p.Add(glanceTiles, 72);
+        // Performance: server version and updates, the memory verdict and chart, the game's full live numbers,
+        // this PC, and anything that looks wrong. (Home shows the short version.)
+        void BuildPerformance()
+        {
+            var p = pgPerf = NewPage();
+            p.H1("Performance");
+            p.P("How the server is running: its version, memory, the game's own numbers, and anything that looks wrong.");
 
-            // ---- server updates
-            p.H2("Server updates");
+            p.H2("Server version");
             lblUpdate = Fixed(p, 64, Theme.Text);
             var check = Theme.Btn("Check for updates");
             check.Click += async (s, e) => await CheckForUpdate(true);
@@ -96,23 +115,21 @@ namespace Ezpz
             btnUpdateNow.Click += async (s, e) => await UpdateServerFlow();
             p.Buttons(check, btnUpdateNow);
 
-            // ---- health
-            p.H2("Health");
+            p.H2("Memory");
             lblVerdict = new Label { AutoSize = true, Font = new Font("Segoe UI Semibold", 15f), ForeColor = Theme.Text, MaximumSize = new Size(Page.Wide, 0) };
             p.Add(lblVerdict, 32);
             lblVerdictDetail = Fixed(p, 62, Theme.Text);
+            p.P("In use after each Java memory cleanup:", Theme.Muted);
+            heapChart = new HeapChart { Size = new Size(Page.Wide, 210) };
+            p.Add(heapChart, 210);
+            lblHeapNums = Fixed(p, 44, Theme.Text);
+            p.P("Windows shows the server holding most of its max all the time, because Java reserves memory up front. The line above is what the world actually needs, measured by Java.");
 
             p.H2("Live server");
             statTiles = new FlowLayoutPanel { Size = new Size(Page.Wide, 152), WrapContents = true, BackColor = Color.Transparent };
             foreach (var t in Tiles) statTiles.Controls.Add(MakeTile(t[1]));
             p.Add(statTiles, 148);
             lblStatsNote = Fixed(p, 24, Theme.Muted);
-
-            p.H2("Memory in use (after each Java memory cleanup)");
-            heapChart = new HeapChart { Size = new Size(Page.Wide, 210) };
-            p.Add(heapChart, 210);
-            lblHeapNums = Fixed(p, 44, Theme.Text);
-            p.P("Windows shows the server holding most of its max all the time, because Java reserves memory up front. The line above is what the world actually needs, measured by Java.");
 
             p.H2("This PC");
             lblPcNums = Fixed(p, 44, Theme.Muted);
@@ -130,7 +147,6 @@ namespace Ezpz
         {
             if (pgHome == null) return;
             RefreshHomeStatus();
-            RefreshGlance();
             UpdateUpdateLabel();
             if (latestBuild == null && !checkingUpdate && updateError == null && lastUpdateCheck == DateTime.MinValue) { var _ = CheckForUpdate(false); }
 
@@ -170,6 +186,8 @@ namespace Ezpz
             var problems = HealthCheck.FindProblems(S, gc, crashTimes.Count, server.State == ServerState.Running ? (int)deadlocked : 0);
             lblProblems.Text = problems.Count == 0 ? "None found." : "• " + string.Join("\n• ", problems);
             lblProblems.ForeColor = problems.Count == 0 ? Theme.Muted : Theme.Warn;
+            RefreshGlance(v);
+            RefreshAttention(v, problems);
 
             // Metrics endpoint: cheap and silent, so every 5 s. The console "stats" fallback is logged by PZ, so once a minute.
             if (server.State == ServerState.Running) { if ((DateTime.Now - lastStatsPoll).TotalSeconds >= (server.MetricsPort > 0 ? 5 : 60)) PollLiveStats(); }
@@ -210,54 +228,6 @@ namespace Ezpz
             tbHomeBroadcast.Clear();
         }
 
-        // ---------- at a glance
-
-        void RefreshGlance()
-        {
-            if (glanceTiles == null) return;
-            if (ebsKhz == null && !ebsLookedUp) LookupEbs();
-            var ini = IniFile.Load(S.IniPath);
-            int modsOn = ModConfig.Split(ini.Get("Mods", "")).Count;
-            int modProblems = ComputeModIssues().Count(l => l.StartsWith("⚠"));
-            string lastBackup = "none";
-            try
-            {
-                if (Directory.Exists(S.BackupDir))
-                {
-                    var f = new DirectoryInfo(S.BackupDir).GetFiles(S.ServerName + "_*.zip").OrderByDescending(x => x.CreationTime).FirstOrDefault();
-                    if (f != null) lastBackup = FriendlyTime(f.CreationTime);
-                }
-            }
-            catch { }
-            string nextRestart = "off";
-            if (S.RestartHours > 0)
-            {
-                if (server.State == ServerState.Running)
-                {
-                    var left = server.StartedAt.AddHours(S.RestartHours) - DateTime.Now;
-                    nextRestart = left.TotalSeconds > 0 ? "in " + (int)left.TotalHours + "h " + left.Minutes.ToString("00") + "m" : "now";
-                }
-                else nextRestart = "every " + S.RestartHours + "h";
-            }
-            string[] values =
-            {
-                ebsKhz != null ? GameData.FormatFreq(ebsKhz) : "—",
-                modsOn.ToString(),
-                modProblems.ToString(),
-                lastBackup,
-                nextRestart,
-                SteamCmd.InstalledBuildId(S) ?? "—",
-            };
-            if (glanceTiles.IsDisposed || glanceTiles.Controls.Count < values.Length) return;
-            for (int i = 0; i < values.Length; i++)
-            {
-                var v = (Label)glanceTiles.Controls[i].Controls[0];
-                v.Text = values[i];
-                v.Font = values[i].Length > 9 ? Theme.H2 : TileFont;
-                v.ForeColor = i == 2 && modProblems > 0 ? Theme.Warn : Theme.Text;
-            }
-        }
-
         // ---------- server updates
 
         async System.Threading.Tasks.Task CheckForUpdate(bool userAsked)
@@ -284,7 +254,7 @@ namespace Ezpz
                 checkingUpdate = false;
                 lastUpdateCheck = DateTime.Now;
                 UpdateUpdateLabel();
-                RefreshGlance();
+                if (currentPage == PHome || currentPage == PPerf) RefreshHome();
             }
         }
 

@@ -234,7 +234,7 @@ namespace Ezpz
                 var ini = IniFile.Load(S.IniPath);
                 int port; string pw = ini.Get("RCONPassword", "");
                 if (!int.TryParse(ini.Get("RCONPort", ""), out port) || pw == "")
-                    throw new Exception("This server was started outside the manager. Set RCONPort and RCONPassword on the Configure page (then restart once) so the manager can send commands.");
+                    throw new Exception("This server was started outside the manager. Set RCONPort and RCONPassword on the Settings page (then restart once) so the manager can send commands.");
                 if (echo) Emit("> " + cmd + "   (via RCON)");
                 string resp = Rcon.Send(port, pw, cmd);
                 if (!string.IsNullOrEmpty(resp)) Emit(resp.TrimEnd());

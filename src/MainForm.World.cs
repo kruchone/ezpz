@@ -19,7 +19,7 @@ namespace Ezpz
         void BuildWorld()
         {
             var p = pgWorld = NewPage();
-            p.H1("World & Weather");
+            p.H1("Events & weather");
 
             p.H2("Emergency Broadcast System (EBS)");
             lblEbs = new Label { AutoSize = true, Font = new Font("Segoe UI Semibold", 26f), ForeColor = Theme.Accent, Text = "—" };
@@ -102,7 +102,7 @@ namespace Ezpz
                     ebsLooking = false;
                     ebsLookedUp = true;
                     UpdateEbsLabel();
-                    if (currentPage == PHome) RefreshGlance();
+                    if (currentPage == PHome) RefreshHome();
                 });
             });
         }

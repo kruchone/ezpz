@@ -27,7 +27,7 @@ namespace Ezpz
         readonly Timer detectTimer = new Timer();
 
         Panel content, nav;
-        readonly List<Button> navButtons = new List<Button>();
+        readonly Button[] navButtons = new Button[PCount];
         readonly List<Page> pages = new List<Page>();
         Page pgSetup, pgConfig, pgWorld, pgBackups, pgReset;
         Panel pgMods;
@@ -57,7 +57,7 @@ namespace Ezpz
             AutoScaleDimensions = new SizeF(96f, 96f);
             AutoScaleMode = AutoScaleMode.Dpi;
             ClientSize = new Size(1220, 820);
-            MinimumSize = new Size(1000, 650);
+            MinimumSize = new Size(1000, 680);
             StartPosition = FormStartPosition.CenterScreen;
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
 
@@ -74,6 +74,7 @@ namespace Ezpz
             BuildConsole();
             BuildLogs();
             BuildHome();
+            BuildPerformance();
             BuildPlayers();
             BuildMap();
             BuildWorld();
@@ -146,24 +147,43 @@ namespace Ezpz
             h.Layout += (s, e) => { f.Location = new Point(h.ClientSize.Width - f.Width - 12, 14); };
         }
 
+        // The side menu: Home, then pages grouped by job. A heading is { -1, "NAME" }.
+        static readonly object[][] NavLayout =
+        {
+            new object[] { PHome, "⌂   Home" },
+            new object[] { -1, "LIVE" },
+            new object[] { PPlayers, "Players" }, new object[] { PMap, "Map" }, new object[] { PConsole, "Console" },
+            new object[] { PLogs, "Logs" }, new object[] { PPerf, "Performance" },
+            new object[] { -1, "WORLD" },
+            new object[] { PWorld, "Events & weather" }, new object[] { PSandbox, "World rules" }, new object[] { PMods, "Mods" },
+            new object[] { -1, "SERVER" },
+            new object[] { PConfig, "Settings" }, new object[] { PDiscord, "Discord" }, new object[] { PBackups, "Backups" },
+            new object[] { PReset, "Reset & wipes" }, new object[] { PSetup, "Setup" },
+        };
+
         void BuildNav()
         {
-            string[] names = { "Home", "Setup", "Configure", "Sandbox", "Mods", "Console", "Logs", "Players & Admin", "Map", "World & Weather", "Discord", "Backups", "Reset" };
-            int y = 14;
-            for (int i = 0; i < names.Length; i++)
+            int y = 12;
+            foreach (var item in NavLayout)
             {
-                int idx = i;
+                int idx = (int)item[0];
+                if (idx < 0)
+                {
+                    nav.Controls.Add(new Label { Text = (string)item[1], Location = new Point(20, y + 8), AutoSize = true, ForeColor = Theme.Muted, Font = new Font("Segoe UI Semibold", 8f) });
+                    y += 26;
+                    continue;
+                }
                 var b = new Button
                 {
-                    Text = (i == PHome ? "⌂   " : i + "   ") + names[i], FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
-                    Size = new Size(200, 36), Location = new Point(10, y), ForeColor = Theme.Text, Font = Theme.Bold,
+                    Text = (string)item[1], FlatStyle = FlatStyle.Flat, TextAlign = ContentAlignment.MiddleLeft,
+                    Size = new Size(200, 31), Location = new Point(10, y), ForeColor = Theme.Text, Font = Theme.Bold,
                     BackColor = Theme.Side, Cursor = Cursors.Hand, Padding = new Padding(8, 0, 0, 0)
                 };
                 b.FlatAppearance.BorderSize = 0;
                 b.Click += (s, e) => ShowPage(idx);
                 nav.Controls.Add(b);
-                navButtons.Add(b);
-                y += i == PHome ? 48 : 37;
+                navButtons[idx] = b;
+                y += idx == PHome ? 38 : 32;
             }
             navButtons[PReset].ForeColor = Theme.Danger;
             lblNavData = new Label { Text = "Data:\n" + S.DataDir, ForeColor = Theme.Muted, AutoSize = true, MaximumSize = new Size(200, 0), Location = new Point(14, y + 20) };
@@ -171,7 +191,8 @@ namespace Ezpz
         }
 
         // Page numbers, in nav order.
-        const int PHome = 0, PSetup = 1, PConfig = 2, PSandbox = 3, PMods = 4, PConsole = 5, PLogs = 6, PPlayers = 7, PMap = 8, PWorld = 9, PDiscord = 10, PBackups = 11, PReset = 12;
+        const int PHome = 0, PSetup = 1, PConfig = 2, PSandbox = 3, PMods = 4, PConsole = 5, PLogs = 6, PPlayers = 7, PMap = 8, PWorld = 9, PDiscord = 10, PBackups = 11, PReset = 12, PPerf = 13;
+        const int PCount = 14;
 
         public int StartPage;
         int currentPage = -1;
@@ -179,7 +200,7 @@ namespace Ezpz
         {
             if (i != currentPage && !LeaveCheck()) return;
             currentPage = i;
-            Control[] all = { pgHome, pgSetup, pgConfig, pgSandbox, pgMods, pgConsole, pgLogs, pgPlayers, pgMap, pgWorld, pgDiscord, pgBackups, pgReset };
+            Control[] all = { pgHome, pgSetup, pgConfig, pgSandbox, pgMods, pgConsole, pgLogs, pgPlayers, pgMap, pgWorld, pgDiscord, pgBackups, pgReset, pgPerf };
             for (int k = 0; k < all.Length; k++)
             {
                 all[k].Visible = k == i;
@@ -189,7 +210,7 @@ namespace Ezpz
             if (i == PConfig) LoadConfig();
             if (i == PSandbox) RefreshSandbox(false);
             if (i == PMods) RefreshMods(false);
-            if (i == PHome) RefreshHome();
+            if (i == PHome || i == PPerf) RefreshHome();
             if (i == PMap) OnMapShown();
             if (i == PLogs) LoadLogs(false);
             if (i == PPlayers) { RefreshPlayers(true); RefreshCatalog(); }
@@ -220,7 +241,7 @@ namespace Ezpz
             "Install the server files with SteamCMD",
             "Generate the default config (first start of the server)",
             "Set up Windows Firewall (open the game ports, keep the server's TCP ports private)",
-            "Customize your server on the Configure page (optional)",
+            "Customize your server on the Settings page (optional)",
             "Forward the UDP ports on your router (only for players outside your home network)",
             "Start the server",
         };
@@ -249,7 +270,7 @@ namespace Ezpz
             p.Hint("World saves, configs, player database and logs. Kept separate from your own game's Zomboid folder so a reset never touches your single-player saves.");
             tbBackup = p.PathRow("Backups folder", S.BackupDir, BrowseFolder);
             tbName = p.Row("Server name (ID)", Theme.Box(S.ServerName), 240);
-            p.Hint("Internal ID: letters, numbers, - and _ only. It names the config files and save folder. (The name players see is set on the Configure page.)");
+            p.Hint("Internal ID: letters, numbers, - and _ only. It names the config files and save folder. (The name players see is set on the Settings page.)");
             tbAdminPw = p.Row("Admin password", Theme.Box(S.AdminPassword), 240);
             tbAdminPw.UseSystemPasswordChar = true;
             var show = Theme.Check("Show", false);
@@ -496,7 +517,7 @@ namespace Ezpz
         void BuildConfig()
         {
             var p = pgConfig = NewPage();
-            p.H1("Configure");
+            p.H1("Settings");
             lblCfgMissing = p.P("No config file yet. Click 'Generate default config' on the Setup page first, so you start from Project Zomboid's full default settings.", Theme.Warn);
             p.P("Most settings take effect after a restart. Click 'Apply live' to reload settings on a running server. Mods are set up on the Mods page.");
 
@@ -520,7 +541,7 @@ namespace Ezpz
 
             p.H2("World rules (sandbox), spawns & imports");
             p.P("Zombie count, loot, XP, day length and similar world rules are in the SandboxVars file. Edit it directly, or set up a game with the in-game Host menu and import its files here.");
-            var sb = Theme.Btn("Sandbox (world rules)");
+            var sb = Theme.Btn("World rules");
             sb.Click += (s, e) => ShowPage(PSandbox);
             var sr = Theme.Btn("Edit spawn regions");
             sr.Click += (s, e) => EditFile(S.SpawnRegionsPath);
@@ -834,7 +855,7 @@ namespace Ezpz
         void BuildReset()
         {
             var p = pgReset = NewPage();
-            p.H1("Reset");
+            p.H1("Reset & wipes");
             p.P("Wipe this server back to a fresh state. Only files belonging to this server ID inside the data folder are touched. Your server install, mods, backups and your own single-player saves are never deleted.");
             BuildWipeSection(p);
             p.H2("Reset now");
@@ -1083,7 +1104,7 @@ namespace Ezpz
             DiscordTick();
             BackupTick();
             if (currentPage == PLogs && ticks % 10 == 0) LoadLogs(false);
-            if (currentPage == PHome && ticks % 3 == 0) RefreshHome();
+            if ((currentPage == PHome || currentPage == PPerf) && ticks % 3 == 0) RefreshHome();
 
             // scheduled restarts with in-game warnings
             if (server.State == ServerState.Running && S.RestartHours > 0 && busy == null)
@@ -1138,7 +1159,7 @@ namespace Ezpz
             lblStatus.Text = "● " + StateText();
             UpdateTitle();
             DiscordOnState(st);
-            if (currentPage == PHome) RefreshHome();
+            if (currentPage == PHome || currentPage == PPerf) RefreshHome();
             lblStatus.ForeColor = st == ServerState.Running ? Theme.Accent : st == ServerState.Stopped ? Theme.Muted : Theme.Warn;
             btnStart.Enabled = st == ServerState.Stopped;
             btnStart.BackColor = btnStart.Enabled ? Theme.AccentBtn : Theme.Card;

@@ -111,7 +111,7 @@ namespace Ezpz
             btnBans.Click += (s, e) => ShowBans();
             top.Controls.AddRange(new Control[] { refresh, chkAutoPlayers, chkShowOffline, lblPlayerCounts, btnRequests, btnTickets, btnBans });
             p.Controls.Add(top);
-            var title = new Label { Text = "Players & Admin", Font = Theme.H1, Dock = DockStyle.Top, Height = 44, ForeColor = Theme.Text };
+            var title = new Label { Text = "Players", Font = Theme.H1, Dock = DockStyle.Top, Height = 44, ForeColor = Theme.Text };
             p.Controls.Add(title);
 
             // the character sheet shrinks on short windows so the player list always keeps some room
