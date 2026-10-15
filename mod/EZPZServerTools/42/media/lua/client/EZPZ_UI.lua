@@ -453,7 +453,7 @@ function EZPZ.refresh()
             if near then
                 parts[#parts + 1] = "THE END IS NEAR   " .. clock(wipe)
             else
-                parts[#parts + 1] = "Season " .. s.season .. (s.day and s.day > 0 and (" · day " .. s.day) or "")
+                parts[#parts + 1] = "Season " .. s.season .. (s.day and s.day > 0 and (", day " .. s.day) or "")
                 if wipe >= 0 then parts[#parts + 1] = "wipe in " .. clock(wipe) end
             end
             show = true
@@ -472,7 +472,7 @@ function EZPZ.refresh()
             EZPZ.showBanner("Season " .. s.season .. " ends with the wipe in " .. clock(wipe))
         end
     end
-    local text = table.concat(parts, "   ·   ")
+    local text = table.concat(parts, "   |   ")
     if #parts > 0 then text = string.upper(string.sub(text, 1, 1)) .. string.sub(text, 2) end
     ui.bar.text = text
     ui.bar.red = red

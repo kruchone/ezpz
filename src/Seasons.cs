@@ -389,7 +389,7 @@ namespace Ezpz
             if (standings != null)
                 foreach (var st in standings.Where(x => x.Qualified).Take(50))
                     sb.Append("p|").Append(st.Name.Replace("|", "")).Append('|').Append(st.Rank).Append('|').Append(st.Score.ToString("0.0", CultureInfo.InvariantCulture))
-                      .Append('|').Append(string.Join("|", Categories.Select(c => Show(c, st.Raw[c]).Replace("|", "")))).Append('\n');
+                      .Append('|').Append(string.Join("|", Categories.Select(c => Show(c, st.Raw[c]).Replace("|", "").Replace("—", "-")))).Append('\n');   // the game's fonts lack "—"
             foreach (var n in notices ?? new string[0]) sb.Append("notice|").Append(n.Replace("\n", " ")).Append('\n');
             return sb.ToString();
         }
