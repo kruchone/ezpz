@@ -118,6 +118,12 @@ function EZPZBar:new()
 end
 
 function EZPZBar:prerender()
+    -- sized to the text right before drawing, so the background always covers it
+    local w = textW(UIFont.Medium, self.text) + 48
+    if math.abs(w - self.width) > 1 then
+        self:setWidth(w)
+        self:setX((getCore():getScreenWidth() - w) / 2)
+    end
     if self.red then
         self.backgroundColor = { r = 0.45, g = 0.02, b = 0.02, a = 0.8 }
         self.borderColor = { r = 1, g = 0.2, b = 0.2, a = 0.7 }
@@ -477,7 +483,7 @@ function EZPZ.refresh()
     ui.bar.text = text
     ui.bar.red = red
     ui.bar.clickable = s ~= nil and s.season ~= nil and s.season > 0
-    local w = textW(UIFont.Medium, text) + 36
+    local w = textW(UIFont.Medium, text) + 48
     ui.bar:setWidth(w)
     ui.bar:setX((screenW() - w) / 2)
     ui.bar:setY(barY(ui.bar.height))
