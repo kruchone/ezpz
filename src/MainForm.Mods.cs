@@ -136,6 +136,7 @@ namespace Ezpz
             {
                 try { wsMods[w] = ModScanner.Scan(S, w); } catch { wsMods[w] = new List<ModEntry>(); }
             }
+            try { localMods = ModScanner.ScanLocal(S); } catch { localMods = new List<ModEntry>(); }
             lastRun = ModConfig.ReadLastRun(S);
         }
 
@@ -150,7 +151,9 @@ namespace Ezpz
             });
         }
 
-        IEnumerable<ModEntry> AllMods { get { return wsOrder.Where(wsMods.ContainsKey).SelectMany(w => wsMods[w]); } }
+        List<ModEntry> localMods = new List<ModEntry>();
+
+        IEnumerable<ModEntry> AllMods { get { return wsOrder.Where(wsMods.ContainsKey).SelectMany(w => wsMods[w]).Concat(localMods); } }
 
         string TitleOf(string ws)
         {
@@ -180,7 +183,7 @@ namespace Ezpz
                 if (byId.TryGetValue(id, out m)) AddModRow(m, true, n++);
                 else
                 {
-                    var it = lvMods.Items.Add(new ListViewItem(new[] { id, "", "(not in any Workshop item here)", "Missing", "" }));
+                    var it = lvMods.Items.Add(new ListViewItem(new[] { id, "", "(not in any Workshop item or the server's mods folder)", "Missing", "" }));
                     it.Name = "mod:" + id; it.Checked = true; it.ForeColor = Theme.Danger;
                     it.Tag = null;
                     n++;
@@ -198,6 +201,7 @@ namespace Ezpz
                 }
                 foreach (var m in mods) if (!enabledMods.Contains(m.Id)) AddModRow(m, false, 0);
             }
+            foreach (var m in localMods) if (!enabledMods.Contains(m.Id)) AddModRow(m, false, 0);
 
             if (keep != null && lvMods.Items.ContainsKey(keep)) lvMods.Items[keep].Selected = true;
             lvMods.EndUpdate();
@@ -215,7 +219,8 @@ namespace Ezpz
             else if (enabled) { status = modsDirty ? "On (save + restart)" : "On (restart to load)"; color = Theme.Text; }
             else { status = "Off"; color = Theme.Muted; }
             string id = enabled ? order + ".  " + m.Id : m.Id;
-            var it = new ListViewItem(new[] { id, m.Name, TitleOf(m.WorkshopId), status, string.Join(", ", m.Requires) });
+            if (m.Local) status = "Local · " + status;
+            var it = new ListViewItem(new[] { id, m.Name, m.Local ? "Server's mods folder (players need their own copy)" : TitleOf(m.WorkshopId), status, string.Join(", ", m.Requires) });
             it.Name = "mod:" + m.Id;
             it.Tag = m;
             it.Checked = enabled;
@@ -248,6 +253,7 @@ namespace Ezpz
             if (lvMods.SelectedItems.Count != 1) { Warn("Select a mod or Workshop item in the list first."); return null; }
             var t = lvMods.SelectedItems[0].Tag;
             var m = t as ModEntry;
+            if (m != null && m.Local) { Warn(m.Name + " is a local mod from the server's mods folder, not a Workshop item."); return null; }
             if (m != null) return m.WorkshopId;
             return t as string;
         }
@@ -349,7 +355,7 @@ namespace Ezpz
         {
             var lines = ComputeModIssues();
             if (lines.Count == 0)
-                lines.Add(wsOrder.Count == 0 ? "No mods yet." : "No problems found.");
+                lines.Add(wsOrder.Count == 0 && localMods.Count == 0 ? "No mods yet." : "No problems found.");
             tbModIssues.Text = string.Join("\r\n", lines);
             ShowModState();
         }
@@ -374,7 +380,7 @@ namespace Ezpz
                 foreach (var f in m.MapFolders) lines.Add("Map: " + m.Id + " adds the map \"" + f + "\". It's added to Map= automatically when you save.");
             }
             foreach (var id in enabledMods.Where(id => !known.Contains(id)))
-                lines.Add("⚠ " + id + " is turned on but isn't in any downloaded Workshop item. Add or download its item, or untick it.");
+                lines.Add("⚠ " + id + " is turned on but isn't in any downloaded Workshop item or the server's mods folder. Add or download its item, or untick it.");
             foreach (var g in all.GroupBy(m => m.Id, StringComparer.OrdinalIgnoreCase).Where(g => g.Select(x => x.WorkshopId).Distinct().Count() > 1))
                 lines.Add("⚠ Mod ID " + g.Key + " appears in more than one Workshop item.");
             foreach (var w in wsOrder)

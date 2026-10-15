@@ -28,7 +28,7 @@ namespace Ezpz
         Control BuildSheet()
         {
             sheetPanel = new Panel { Dock = DockStyle.Bottom, Height = 330, BackColor = Theme.Side, Padding = new Padding(14, 10, 14, 8) };
-            var head = new Panel { Dock = DockStyle.Top, Height = 54, BackColor = Theme.Side };
+            var head = new Panel { Dock = DockStyle.Top, Height = 112, BackColor = Theme.Side };
             // name row: the name on the left, the "untrained" toggle on the right
             var nameRow = new Panel { Dock = DockStyle.Top, Height = 28, BackColor = Theme.Side };
             chkAllSkills = new CheckBox { Text = "Show untrained skills", Dock = DockStyle.Right, Width = 170, ForeColor = Theme.Muted, CheckAlign = ContentAlignment.MiddleLeft };
@@ -42,6 +42,8 @@ namespace Ezpz
                 ActiveLinkColor = Theme.Accent, VisitedLinkColor = Theme.Info, LinkBehavior = LinkBehavior.HoverUnderline
             };
             lblSheetSub.LinkClicked += (s, e) => Util.OpenUrl((string)e.Link.LinkData);
+            lblSheetLive = new Label { Dock = DockStyle.Top, Height = 58, ForeColor = Theme.Accent, UseMnemonic = false, AutoEllipsis = true };   // three short lines
+            head.Controls.Add(lblSheetLive);   // live condition from EZPZ Server Tools (empty without it)
             head.Controls.Add(lblSheetSub);
             head.Controls.Add(nameRow);
             lblSheetNet = new Label { Dock = DockStyle.Bottom, Height = 36, ForeColor = Theme.Muted, UseMnemonic = false };
@@ -116,7 +118,7 @@ namespace Ezpz
                 SetSheetSub("Select a player in the list to see their character.", null, null);
                 skillsView.SetData(null, perkNames);
                 SizeSkills();
-                lblSheetUps.Text = ""; lblSheetNet.Text = "";
+                lblSheetUps.Text = ""; lblSheetNet.Text = ""; lblSheetLive.Text = "";
                 return;
             }
             CharacterSheet c;
@@ -171,6 +173,7 @@ namespace Ezpz
             else if (on && server.MetricsPort <= 0)
                 lblSheetNet.Text = "Per-player network figures appear once the server has been started by this version of ezpz.";
             else lblSheetNet.Text = "";
+            UpdateSheetLive();
             lblSheetNet.Visible = lblSheetNet.Text != "";
             lblSheetUps.Visible = lblSheetUps.Text != "";
             SizeSkills();

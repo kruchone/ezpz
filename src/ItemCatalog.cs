@@ -95,6 +95,8 @@ namespace Ezpz
             foreach (var ws in ModConfig.Split(ini.Get("WorkshopItems", "")))
                 foreach (var m in ModScanner.Scan(s, ws))
                     if (!byId.ContainsKey(m.Id)) byId[m.Id] = m;
+            foreach (var m in ModScanner.ScanLocal(s))
+                if (!byId.ContainsKey(m.Id)) byId[m.Id] = m;
             var list = new List<KeyValuePair<string, string>>();
             foreach (var id in enabled)
             {

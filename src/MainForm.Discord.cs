@@ -426,6 +426,7 @@ namespace Ezpz
             if (ticks % 10 == 5) PerkTick();
             if (ticks % 5 == 3) StatusTick();
             if (ticks % 30 == 20) TicketTick();
+            if (ticks % 5 == 4) LiveTick();
             if (S.DiscordWebhook == "" || server.State != ServerState.Running) return;
             if (DiscordWants(DiscordEvent.Health) && ticks % 60 == 0)
             {

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Live player condition, with the new **EZPZ Server Tools** mod (in `mod/`, not on the Workshop yet): Home has a "Players right now" list with each online player's health, injuries (bites, scratches, bleeding, deep wounds, fractures, burns, infection), moodles with levels, hunger, thirst and tiredness, and where they are or what they're driving. The character sheet shows the same for the selected player. Each player's game reports every 10 seconds; nothing in the game is changed.
+- Mods page: mods in the server's own mods folder (`<data>\mods`) are listed as **Local** instead of Missing, noting that players need their own copy (servers only hand out Workshop mods). Their items also show in the item picker.
 - Players: **Tickets**. The help requests players file from the game's ticket window now show on the Players page (a Tickets button appears when there are any). Read them, answer them (the player sees the answer in game) or delete them. New tickets are logged, flash the taskbar, and can be posted to Discord.
 - Players: **Bans**. A Bans button lists banned accounts, Steam IDs and IP addresses with the reason, read from the server's database, and unbans with one click while the server runs.
 - Character sheets show the character's in-game name, whether they're alive, and their last saved position from the world save, with the position linking to pzmap.org.

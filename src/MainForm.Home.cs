@@ -79,6 +79,8 @@ namespace Ezpz
             send.Click += (s, e) => HomeBroadcast();
             p.Controls.Add(send);
 
+            BuildLiveSection(p);
+
             // ---- at a glance (facts from the other pages)
             p.H2("At a glance");
             glanceTiles = new FlowLayoutPanel { Size = new Size(Page.Wide, 76), WrapContents = true, BackColor = Color.Transparent };
