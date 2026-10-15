@@ -495,7 +495,7 @@ function EZPZ.refresh()
         ui.season:setWidth(w2)
         ui.season:setHeight(h)
         ui.season:setX((screenW() - w2) / 2)
-        ui.season:setY(ui.bar.y - h - 6)   -- opens upward from the bar
+        ui.season:setY((screenH() - h) / 2)   -- centre of the screen
     end
     ui.season:setVisible(open)
 
