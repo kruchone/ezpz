@@ -239,6 +239,7 @@ namespace Ezpz
                     }
 
             foreach (var p in season.Players.Values) R(p.Name).Seen = true;
+            var pvp = PvpKills(s, from, until);
 
             var w = Weights(s);
             var active = Active(s, season);
@@ -257,7 +258,8 @@ namespace Ezpz
                 st.Raw["Explorer"] = sp != null ? sp.Cells.Count : 0;
                 st.Raw["Resilience"] = r.Played > 0 ? r.Deaths / r.Played * 10 : r.Deaths;   // deaths per 10 hours
                 st.Raw["FinalStand"] = alive != null && alive.Contains(kv.Key) ? 1 : 0;
-                st.Raw["PvP"] = sp != null ? sp.PvpKills : 0;
+                int pk;
+                st.Raw["PvP"] = (pvp.TryGetValue(kv.Key, out pk) ? pk : 0) + (sp != null ? sp.PvpKills : 0);
                 string role;
                 bool staff = roles != null && roles.TryGetValue(kv.Key, out role) && (role == "admin" || role == "moderator" || role == "gm" || role == "overseer");
                 if (sp != null && sp.Disqualified) { st.Qualified = false; st.Note = "Disqualified" + (sp.DqReason != "" ? ": " + sp.DqReason : ""); }
@@ -296,6 +298,33 @@ namespace Ezpz
             int rank = 0;
             foreach (var st in list.Where(x => x.Qualified).OrderByDescending(x => x.Score).ThenByDescending(x => x.Raw["Endurance"])) st.Rank = ++rank;
             return list.OrderBy(x => x.Qualified ? 0 : 1).ThenBy(x => x.Rank).ThenByDescending(x => x.Score).ToList();
+        }
+
+        // Players killed by each player in the window, from EZPZ Server Tools' Lua\ezpz_events.json (one JSON object per line).
+        public static Dictionary<string, int> PvpKills(AppSettings s, DateTime from, DateTime until)
+        {
+            var d = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            string path = Path.Combine(s.DataDir, "Lua", "ezpz_events.json");
+            if (!File.Exists(path)) return d;
+            var json = new JavaScriptSerializer();
+            var epoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            foreach (var line in Lines(path))
+            {
+                if (line.Trim() == "") continue;
+                Dictionary<string, object> e;
+                try { e = json.DeserializeObject(line) as Dictionary<string, object>; } catch { continue; }
+                object killer, victim, at, ev;
+                if (e == null || !e.TryGetValue("event", out ev) || (ev as string) != "death" || !e.TryGetValue("killer", out killer) || !(killer is string)) continue;
+                if (!e.TryGetValue("victim", out victim) || string.Equals(victim as string, (string)killer, StringComparison.OrdinalIgnoreCase)) continue;
+                double ms;
+                if (!e.TryGetValue("at", out at) || !double.TryParse(Convert.ToString(at, CultureInfo.InvariantCulture), NumberStyles.Float, CultureInfo.InvariantCulture, out ms)) continue;
+                var t = epoch.AddMilliseconds(ms).ToLocalTime();
+                if (t < from || t > until) continue;
+                int n;
+                d.TryGetValue((string)killer, out n);
+                d[(string)killer] = n + 1;
+            }
+            return d;
         }
 
         static void AddPlayed(Raw r, DateTime a, DateTime b, DateTime from, DateTime until)

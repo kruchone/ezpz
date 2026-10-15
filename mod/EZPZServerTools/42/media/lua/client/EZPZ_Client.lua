@@ -1,7 +1,8 @@
 -- EZPZ Server Tools, client half.
 -- Every few seconds, the player's own game sends a small summary of their character to the server
--- (in multiplayer the player's game is the authority on their body and moodles). Read-only: nothing
--- about the game is changed.
+-- (in multiplayer the player's game is the authority on their body and moodles), and reports the
+-- player's death (and who killed them, if it was another player). Read-only: nothing about the game is
+-- changed. The on-screen panels are in EZPZ_UI.lua.
 
 EZPZ = EZPZ or {}
 EZPZ.REPORT_MS = 10000
@@ -80,7 +81,7 @@ local function collect(p)
         d.driving = try(function() return v:getDriver() == p end)
     end
     d.asleep = try(function() return p:isAsleep() end)
-    d.mod = "0.1.0"
+    d.mod = "0.2.0"
     return d
 end
 
@@ -95,4 +96,22 @@ local function onTick()
     if ok and data then sendClientCommand(p, "EZPZ", "report", data) end
 end
 
+-- The player's own death: the cause, and the killer if it was another player (for PvP on the ezpz ladder).
+local function onPlayerDeath(p)
+    if not isClient() or p ~= getPlayer() then return end
+    local d = { cause = "other" }
+    local by = try(function() return p:getAttackedBy() end)
+    if by and instanceof(by, "IsoPlayer") and by ~= p then
+        d.cause = "player"
+        d.killer = try(function() return by:getUsername() end)
+    elseif by and instanceof(by, "IsoZombie") then
+        d.cause = "zombie"
+    end
+    d.x, d.y = p:getX(), p:getY()
+    d.hours = try(function() return p:getHoursSurvived() end)
+    d.kills = try(function() return p:getZombieKills() end)
+    sendClientCommand(p, "EZPZ", "death", d)
+end
+
 Events.OnTick.Add(onTick)
+Events.OnPlayerDeath.Add(onPlayerDeath)

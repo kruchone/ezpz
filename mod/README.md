@@ -1,15 +1,25 @@
 # EZPZ Server Tools (Project Zomboid mod)
 
-A small Build 42 mod that pairs with ezpz. Each player's game reports their character's health, injuries, moodles,
-stats and position to the server every 10 seconds; the server writes the online players to
-`<data folder>\Lua\ezpz_players.json`, which ezpz reads for its dashboard. It adds no items and changes nothing in the
-game.
+A small Build 42 mod that pairs with ezpz. It adds no items and changes nothing in the game.
+
+- **For the dashboard:** each player's game reports their character's health, injuries, moodles, stats and position to
+  the server every 10 seconds. The server writes the online players to `<data folder>\Lua\ezpz_players.json`, which
+  ezpz reads. Deaths (with the killer, when it was another player) are appended to `Lua\ezpz_events.json`, one JSON
+  object per line, for PvP on the season ladder.
+- **For players:** ezpz writes `Lua\ezpz_season.txt` (countdowns, the season ladder, reward notices). The server half
+  reads it every 5 seconds and sends each player what their screen needs: a bar at the top with the restart and wipe
+  countdowns (red during THE END IS NEAR), a one-time THE END IS NEAR banner, the season panel (click the bar), and a
+  reward notice.
+- **For admins:** an **EZPZ** button next to the bar opens a preview pane that shows each panel with sample data, on
+  that admin's screen only.
 
 ```
 EZPZServerTools/
   42/mod.info
-  42/media/lua/client/EZPZ_Client.lua   reports the local player's state (sendClientCommand "EZPZ" / "report")
-  42/media/lua/server/EZPZ_Server.lua   collects reports, writes ezpz_players.json every 5 s
+  42/media/lua/client/EZPZ_Client.lua   reports the local player's state and death (sendClientCommand "EZPZ")
+  42/media/lua/client/EZPZ_UI.lua       the on-screen panels and the admin preview pane
+  42/media/lua/server/EZPZ_Server.lua   writes ezpz_players.json and ezpz_events.json, reads ezpz_season.txt,
+                                        sends each player their state (sendServerCommand "EZPZ" / "state")
   common/                               required by Build 42
 ```
 
@@ -21,5 +31,6 @@ EZPZServerTools/
    join; once it's on the Workshop their game downloads it.
 3. Add `\EZPZServerTools` to the server's `Mods=` line and restart the server.
 4. Join, wait 10-15 seconds, and look for `<data folder>\Lua\ezpz_players.json`.
+5. As an admin, click **EZPZ** at the top of the screen and turn on each preview to check the panels.
 
 Data reported by a player's game could be faked by a cheater, so use it for information, not for automatic action.
