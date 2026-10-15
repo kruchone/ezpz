@@ -35,6 +35,8 @@ namespace Ezpz
         public string DiscordWebhookProtected = "";   // encrypted like the admin password
         public int DiscordEvents = 0x7F;               // DiscordEvent flags to post
         public string SummaryTime = "23:59";           // when the daily summary posts (local time)
+        public bool FirstStartDone = false;            // the server has started for real at least once (setup's last step)
+        public bool WizardPending = false;             // show the setup wizard (new servers)
         public bool WipeEnabled = false;               // scheduled wipes (see WipeSchedule)
         public int WipeRepeat = 0;                     // 0 = every month on WipeDay, 1 = every WipeWeeks weeks on WipeWeekday
         public int WipeDay = 1;                        // 1-28

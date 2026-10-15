@@ -98,6 +98,7 @@ namespace Ezpz
                 Task.Run(() => server.DetectExisting());
                 RefreshAll();
                 ShowPage(StartPage);
+                if (S.WizardPending || !S.IsSaved) ShowWizard();   // a brand-new server
             };
             FormClosing += OnClosingForm;
         }
@@ -243,7 +244,7 @@ namespace Ezpz
             "Set up Windows Firewall (open the game ports, keep the server's TCP ports private)",
             "Customize your server on the Settings page (optional)",
             "Forward the UDP ports on your router (only for players outside your home network)",
-            "Start the server",
+            "Start the server for the first time",
         };
 
         void BuildSetup()
@@ -380,7 +381,7 @@ namespace Ezpz
                 firewallOk,
                 File.Exists(S.IniPath) && IniFile.Load(S.IniPath).Get("PublicName", "") != "",
                 false,
-                server.State == ServerState.Running,
+                S.FirstStartDone || (server.State == ServerState.Running && !server.ConfigOnlyRun),
             };
             int next = -1;
             for (int i = 0; i < checkLabels.Count; i++)
@@ -390,7 +391,8 @@ namespace Ezpz
                 checkLabels[i].ForeColor = done[i] ? Theme.Accent : info ? Theme.Info : Theme.Text;
                 if (!done[i] && next < 0 && i != 4 && i != 5) next = i;
             }
-            lblNextStep.Text = next < 0 ? "All set. Your server is running." : "Next:  " + Steps[next];
+            lblNextStep.Text = next < 0 ? "✓  Setup complete. The server has started successfully." : "Next:  " + Steps[next];
+            lblNextStep.ForeColor = next < 0 ? Theme.Accent : Theme.Warn;
             Task.Run(() =>
             {
                 bool ok = (RunHidden("netsh", "advfirewall firewall show rule name=\"" + FirewallRule + "\"") == 0
@@ -821,6 +823,7 @@ namespace Ezpz
                 rtb.SelectionLength = 0;
                 rtb.SelectionColor = ColorFor(s);
                 rtb.AppendText(s + "\n");
+                WizardLogLine(s);
                 n++;
             }
             if (rtb.TextLength > 1500000)
@@ -1099,6 +1102,7 @@ namespace Ezpz
                 server.TailConsoleLog();
             }
             UpdateStats();
+            WizardRefresh();
             PlayersTick();
             ModWatchTick();
             DiscordTick();
@@ -1159,6 +1163,14 @@ namespace Ezpz
             lblStatus.Text = "● " + StateText();
             UpdateTitle();
             DiscordOnState(st);
+            // setup's last step: the first real start (not the one that only generates the config)
+            if (st == ServerState.Running && !server.ConfigOnlyRun && !S.FirstStartDone)
+            {
+                S.FirstStartDone = true;
+                S.Save();
+                Log("[ezpz] First start complete. Setup is finished.");
+                RefreshChecklist();
+            }
             if (currentPage == PHome || currentPage == PPerf) RefreshHome();
             lblStatus.ForeColor = st == ServerState.Running ? Theme.Accent : st == ServerState.Stopped ? Theme.Muted : Theme.Warn;
             btnStart.Enabled = st == ServerState.Stopped;

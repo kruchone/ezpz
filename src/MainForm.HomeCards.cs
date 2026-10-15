@@ -122,6 +122,8 @@ namespace Ezpz
             bool[] setup = { AppSettings.ValidServerName(S.ServerName) && S.AdminPassword.Length > 0 && S.IsSaved, File.Exists(S.StartBat), File.Exists(S.IniPath), firewallOk };
             int missing = Array.IndexOf(setup, false);
             if (missing >= 0) add("Finish setup: " + Steps[missing] + ".", Theme.Warn, "Open Setup", () => ShowPage(PSetup));
+            else if (!S.FirstStartDone && server.State == ServerState.Stopped)
+                add("Last setup step: start the server for the first time.", Theme.Warn, "Start", () => { var _ = StartFlow(); });
 
             if (dstate.Requests.Count > 0)
                 add(dstate.Requests.Count + " whitelist request" + (dstate.Requests.Count == 1 ? "" : "s") + " waiting, from " + string.Join(", ", dstate.Requests.Select(r => r.DiscordName).Take(3)) + ".", Theme.Warn, "Review", ShowRequests);

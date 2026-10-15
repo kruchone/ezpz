@@ -143,15 +143,11 @@ namespace Ezpz
                 created = d.Result;
             }
             created.ProfileId = AppSettings.NewProfileId(created.ServerName);
+            created.WizardPending = true;
             created.Save();
             Log("[ezpz] Added server \"" + created.ServerName + "\".");
             await SwitchServer(created.ProfileId);
-            if (S.ProfileId == created.ProfileId)
-            {
-                ShowPage(PSetup);
-                Info("Server \"" + S.ServerName + "\" added. Set its admin password and work through the Setup checklist."
-                    + (File.Exists(S.StartBat) ? "" : " It needs its own install, so start with 'Install / Update server'."));
-            }
+            if (S.ProfileId == created.ProfileId) ShowWizard();
         }
 
         async Task RemoveCurrentServer()

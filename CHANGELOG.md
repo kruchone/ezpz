@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Setup wizard** for each new server (and on first run): the Setup page's steps one at a time, each showing only what it needs: name and admin password, install, create the config, firewall, the basics players see (optional), router ports (optional), first start. Progress shows in the wizard. **Skip to the full app** at any point.
+- Setup's last step, **Start the server for the first time**, now turns green on the first real start and stays green, and the checklist says **Setup complete**. Generating the default config doesn't count. Home shows "start the server for the first time" until then.
 - **A tidier menu.** Pages are grouped by job, without numbers: Home; **Live** (Players, Map, Console, Logs, Performance); **World** (Events & weather, World rules); **Server** (Settings, Mods, Discord, Backups, Reset & wipes, Setup). Configure is now **Settings**, Sandbox **World rules**, World & Weather **Events & weather**, Players & Admin **Players**, and Reset **Reset & wipes**.
 - **Home fits on one screen:** status and quick actions, a **Needs attention** list (unfinished setup, whitelist requests, unanswered tickets, server and mod updates, mod problems, memory trouble, a disconnected Discord bot, a wipe within 24 hours), each with a button to deal with it, then players right now beside eight server tiles (players, FPS, zombies, memory, next restart, next wipe, last backup, EBS). Tiles open the page they summarise.
 - New **Performance** page: server version and updates, the memory verdict and chart, the game's full live numbers, this PC and problems, moved from Home.

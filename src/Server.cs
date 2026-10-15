@@ -34,6 +34,7 @@ namespace Ezpz
         // Local port of PZ's built-in Prometheus metrics server (0 = none). Picked fresh at each launch.
         public int MetricsPort { get; private set; }
         public bool StopWhenStarted;
+        public bool ConfigOnlyRun;   // this run only generates the default config (it stops itself once up)
 
         public ServerController(AppSettings s) { S = s; State = ServerState.Stopped; }
 
@@ -195,6 +196,7 @@ namespace Ezpz
             Emit(line);
             if (State == ServerState.Starting && line.IndexOf("SERVER STARTED", StringComparison.OrdinalIgnoreCase) >= 0)
             {
+                ConfigOnlyRun = StopWhenStarted;
                 SetState(ServerState.Running);
                 Emit("[ezpz] Server is up and accepting players.");
                 if (StopWhenStarted)
