@@ -299,6 +299,7 @@ namespace Ezpz
                 try { server.SendCommand("adduser \"" + Q(r.Username) + "\" \"" + pw + "\"", false); }
                 catch (Exception ex) { d.Private = "Couldn't create the account: " + ex.Message; return d; }
                 Log("> adduser \"" + r.Username + "\" \"********\"   (whitelist request from " + r.DiscordName + ", approved by " + by + ")");
+                var _ = Task.Delay(3000).ContinueWith(t => Ui(() => RefreshPlayers(true)));   // the new account shows as "never joined"
                 string dm = b == null ? "ezpz's Discord bot isn't connected" : await b.DirectMessage(r.DiscordUserId, DiscordWebhook.Embed("✅ You're whitelisted on " + title,
                     "Log in with:\n**Username:** `" + r.Username + "`\n**Password:** `" + pw + "`\n\nYou can change the password in game from the server's login screen (Manage account). Keep it to yourself.", DcGreen, "ezpz · " + S.ServerName));
                 d.Public = "✅ Approved by " + by + "." + (dm == null ? " The login details were sent privately." : " Couldn't message them (" + dm + "), so the approver has the password.");

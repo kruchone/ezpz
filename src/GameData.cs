@@ -16,6 +16,7 @@ namespace Ezpz
         public string Ip = "";
         public DateTime FirstSeen = DateTime.MinValue;
         public DateTime LastSeen = DateTime.MinValue;
+        public bool HasAccount;   // listed in the server's account database
     }
 
     public class LevelUp { public DateTime When; public string Perk; public int Level; }
@@ -267,6 +268,16 @@ namespace Ezpz
                     if (!string.IsNullOrEmpty(sid) && sid != "0") p.SteamId = sid;
                     if (!string.IsNullOrEmpty(ip)) p.Ip = ip;
                 }
+            }
+            // accounts from the server's database: adds people who have an account but never joined (e.g. just
+            // whitelisted), and gives everyone their current role even if it changed while they were offline
+            foreach (var a in ServerDb.ReadAccounts(s))
+            {
+                PlayerInfo p;
+                if (!d.TryGetValue(a.Name, out p)) { p = new PlayerInfo { Name = a.Name, LastSeen = a.LastConnection }; d[a.Name] = p; }
+                if (a.Role != "") p.Role = a.Role;
+                if (p.SteamId == "" && a.SteamId != "") p.SteamId = a.SteamId;
+                p.HasAccount = true;
             }
             return d;
         }

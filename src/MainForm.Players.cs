@@ -419,7 +419,7 @@ namespace Ezpz
                 roster.TryGetValue(n, out pi);
                 string role;
                 if (!roleSetHere.TryGetValue(n, out role)) role = pi != null ? pi.Role : "";
-                string seen = on ? "now" : pi != null && pi.LastSeen > DateTime.MinValue ? FriendlyTime(pi.LastSeen) : "";
+                string seen = on ? "now" : pi != null && pi.LastSeen > DateTime.MinValue ? FriendlyTime(pi.LastSeen) : pi != null && pi.HasAccount ? "never joined" : "";
                 var it = new ListViewItem(new[] { (on ? "● " : "    ") + n, role, seen, pi != null ? pi.SteamId : "", pi != null ? pi.Ip : "" });
                 it.Tag = n;
                 it.UseItemStyleForSubItems = true;
