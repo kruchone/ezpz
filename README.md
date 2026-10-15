@@ -32,7 +32,7 @@ ezpz is a single `.exe` with no installer and no dependencies. It installs the d
 - **[Map](https://github.com/kruchone/ezpz/wiki/Map):** the whole world from the server's own map images, with players on it.
 - **[World & Weather](https://github.com/kruchone/ezpz/wiki/World-and-Weather):** rain, storms, lightning and world events, and the emergency radio frequency.
 - **[Discord](https://github.com/kruchone/ezpz/wiki/Discord):** chat bridge, notifications, a live status message, daily summaries, slash commands and whitelist requests.
-- **[Backups](https://github.com/kruchone/ezpz/wiki/Backups) and [Reset](https://github.com/kruchone/ezpz/wiki/Reset):** scheduled backups with one-click restore, and safe resets from "new world" to "factory reset".
+- **[Backups](https://github.com/kruchone/ezpz/wiki/Backups) and [Reset](https://github.com/kruchone/ezpz/wiki/Reset):** scheduled backups with one-click restore, safe resets from "new world" to "factory reset", and scheduled wipes (a fresh world every month, with warnings).
 - **[Several servers](https://github.com/kruchone/ezpz/wiki/Several-Servers):** keep more than one server and switch between them.
 - **[EZPZ Server Tools](https://github.com/kruchone/ezpz/wiki/EZPZ-Server-Tools)** (optional mod, in development): see each player's health, injuries and moodles live.
 

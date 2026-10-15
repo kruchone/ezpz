@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- **Scheduled wipes** (Reset page): reset the server every month on a chosen day, or every few weeks on a chosen weekday, at a set time, with the New world, Fresh map keep characters, or New world + wipe accounts preset. Players are warned in game 24 hours, 1 hour, 15, 5 and 1 minute before; a new Discord notification warns 3 days, 1 day and 1 hour before and says when the fresh world is up. A backup is always made first, and if it fails the wipe is cancelled and the server comes back as it was. The next wipe shows in `/status` and the live status message.
+- The ezpz log no longer repeats the same server-database error every 30 seconds.
 - Fixed: switching servers while on the Map page showed an error, and closing ezpz could show one from a last Home page refresh. Home also no longer creates a new font every second.
 - New **Map** page: the whole world, drawn from the map images in the server install (no internet or game needed), with players on it. Online players move live with EZPZ Server Tools; everyone else shows at their last saved position, and dead characters in red. Drag, scroll to zoom, find a player or go to coordinates, and right-click for pzmap.org.
 - Live player condition, with the new **EZPZ Server Tools** mod (in `mod/`, not on the Workshop yet): Home has a "Players right now" list with each online player's health, injuries (bites, scratches, bleeding, deep wounds, fractures, burns, infection), moodles with levels, hunger, thirst and tiredness, and where they are or what they're driving. The character sheet shows the same for the selected player. Each player's game reports every 10 seconds; nothing in the game is changed.

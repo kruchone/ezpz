@@ -610,6 +610,7 @@ namespace Ezpz
         {
             if (currentPage == PDiscord && DiscordDirty()) return AskSave("Discord settings", SaveDiscordAll, RefreshDiscord);
             if (currentPage == PConfig && ConfigDirty()) return AskSave("server settings", SaveConfig, LoadConfig);
+            if (currentPage == PReset && WipeDirty()) return AskSave("wipe schedule", SaveWipeSchedule, LoadWipeControls);
             return true;
         }
 
@@ -835,6 +836,8 @@ namespace Ezpz
             var p = pgReset = NewPage();
             p.H1("Reset");
             p.P("Wipe this server back to a fresh state. Only files belonging to this server ID inside the data folder are touched. Your server install, mods, backups and your own single-player saves are never deleted.");
+            BuildWipeSection(p);
+            p.H2("Reset now");
 
             p.H2("1. What kind of reset?");
             rbWorld = PresetRadio(p, "New world (recommended)", "Fresh map, fresh loot, everyone starts a new character. Keeps your settings, mods, admins, whitelist and bans.");

@@ -37,6 +37,7 @@ namespace Ezpz
         public Dictionary<string, int> Milestones = new Dictionary<string, int>();   // lower-case name -> days announced for this character
         public DayStats Day = new DayStats();
         public long TicketSeenId = -1;   // newest ticket already announced (-1: not looked yet)
+        public List<string> WipeWarned = new List<string>();   // "<wipe time>|<minutes before>" warnings already given
 
         static readonly JavaScriptSerializer Json = new JavaScriptSerializer();
         static string PathFor(string profileId) { return Path.Combine(AppSettings.ManagerDir, "servers", profileId + ".discord.json"); }

@@ -423,7 +423,9 @@ namespace Ezpz
                     lines.Add("**Next restart:** in about " + restart);
                 }
             }
-            key = label + "|" + names + "|" + up + "|" + restart;
+            string wipe = NextWipeText();
+            if (wipe != null) lines.Add("**Next wipe:** " + wipe.Substring(0, wipe.IndexOf(" (")));
+            key = label + "|" + names + "|" + up + "|" + restart + "|" + wipe;
             return DiscordWebhook.Embed(ServerTitle(), string.Join("\n", lines), color, "Live status · ezpz · " + S.ServerName);
         }
 

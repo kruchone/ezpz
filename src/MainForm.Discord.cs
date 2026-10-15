@@ -31,6 +31,7 @@ namespace Ezpz
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Players, "Players joining and leaving"),
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Health, "Memory problems"),
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Tickets, "New tickets (help requests players file in game)"),
+            new KeyValuePair<DiscordEvent, string>(DiscordEvent.Wipes, "Scheduled wipes: warnings 3 days, 1 day and 1 hour before, and when the fresh world is up"),
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Deaths, "Player deaths"),
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Milestones, "Survival milestones (7, 14, 30, 60, 100, 180 and 365 days)"),
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Status, "A live status message that edits itself (online, players, uptime). Replaces the online, stopped and join posts"),
@@ -400,6 +401,7 @@ namespace Ezpz
 
         void DiscordOnState(ServerState st)
         {
+            WipeOnState(st);
             var was = lastNotifiedState;
             lastNotifiedState = st;
             if (st == ServerState.Running && was != ServerState.Running)
@@ -422,6 +424,7 @@ namespace Ezpz
             if (ticks % 10 == 1) EnsureBot();
             if (ticks % 10 == 2) UpdateBotLabel();
             BotRestartTick();
+            WipeTick();
             DayTick();
             if (ticks % 10 == 5) PerkTick();
             if (ticks % 5 == 3) StatusTick();

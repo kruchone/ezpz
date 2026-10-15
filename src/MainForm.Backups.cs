@@ -238,7 +238,7 @@ namespace Ezpz
             LoadBackupSettings();
         }
 
-        async Task<bool> BackupFlow(string reason)
+        async Task<bool> BackupFlow(string reason, bool quiet = false)
         {
             if (!BeginBusy("Backing up…")) return false;
             try
@@ -254,7 +254,7 @@ namespace Ezpz
                 lastBackupAt = DateTime.Now;
                 return true;
             }
-            catch (Exception ex) { Log("[backup] ERROR: " + ex.Message); Warn("Backup failed: " + ex.Message); return false; }
+            catch (Exception ex) { Log("[backup] ERROR: " + ex.Message); if (!quiet) Warn("Backup failed: " + ex.Message); return false; }
             finally { EndBusy(); if (currentPage == PBackups) RefreshBackupList(); }
         }
 

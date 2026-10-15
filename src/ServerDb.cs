@@ -84,13 +84,27 @@ namespace Ezpz
             return new Exception("The server database couldn't be read (" + what + (m != "" ? ": " + m : "") + ").");
         }
 
-        // Reads, logging problems (once per call) instead of failing: these feed lists that work without them.
+        static readonly Dictionary<string, string> lastErrors = new Dictionary<string, string>();
+
+        // Reads, logging problems instead of failing: these feed lists that work without them.
         static List<T> Read<T>(string path, string what, string sql, Func<Row, T> make)
         {
             var list = new List<T>();
             try { Run(path, false, sql, null, r => list.Add(make(r))); }
             catch (DllNotFoundException) { }   // older Windows without winsqlite3
-            catch (Exception ex) { AppLog.Error("reading " + what + " from the server database", ex); }
+            catch (Exception ex)
+            {
+                // the same problem repeats every few seconds (tickets are polled); log it once
+                lock (lastErrors)
+                {
+                    string prev;
+                    if (lastErrors.TryGetValue(what, out prev) && prev == ex.Message) return list;
+                    lastErrors[what] = ex.Message;
+                }
+                AppLog.Error("reading " + what + " from the server database", ex);
+                return list;
+            }
+            lock (lastErrors) lastErrors.Remove(what);   // working again: a later failure is news
             return list;
         }
 

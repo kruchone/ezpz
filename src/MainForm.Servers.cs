@@ -129,6 +129,7 @@ namespace Ezpz
             LoadBackupSettings();
             lastBackupAt = DateTime.MinValue;
             LoadDiscordControls();
+            LoadWipeControls();
         }
 
         // ---------- add / remove

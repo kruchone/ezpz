@@ -35,6 +35,15 @@ namespace Ezpz
         public string DiscordWebhookProtected = "";   // encrypted like the admin password
         public int DiscordEvents = 0x7F;               // DiscordEvent flags to post
         public string SummaryTime = "23:59";           // when the daily summary posts (local time)
+        public bool WipeEnabled = false;               // scheduled wipes (see WipeSchedule)
+        public int WipeRepeat = 0;                     // 0 = every month on WipeDay, 1 = every WipeWeeks weeks on WipeWeekday
+        public int WipeDay = 1;                        // 1-28
+        public int WipeWeeks = 2;                      // 1-12
+        public int WipeWeekday = 6;                    // 0 = Sunday ... 6 = Saturday
+        public string WipeTime = "18:00";
+        public int WipePreset = 0;                     // 0 = new world, 1 = fresh map keep characters, 2 = new world + wipe accounts
+        public bool WipeStartAfter = true;
+        public string WipeLast = "";                   // when the last scheduled wipe ran ("o" format)
         public bool DiscordBotEnable = false;          // ezpz's own bot connection: commands and whitelist requests
         public string DiscordAdminRole = "";           // role name allowed to run admin commands (besides Administrators)
         public string DiscordRequestChannel = "";      // channel name where whitelist requests are posted for admins
