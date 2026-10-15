@@ -5,11 +5,12 @@
 --   * a one-time THE END IS NEAR banner
 --   * the season panel: your rank and categories, and the top 5
 --   * a reward notice when a reward from last season arrives
--- Admins and moderators also get an EZPZ button next to the bar that opens a preview pane: each panel can be
--- shown with sample data to check how it looks. Previews are local to that admin's screen.
+-- Admins and moderators also get an "EZPZ Server Tools" button in the game's Admin panel. It opens a preview
+-- pane: each panel can be shown with sample data to check how it looks. Previews are local to that admin's screen.
 
 require "ISUI/ISPanel"
 require "ISUI/ISButton"
+require "ISUI/AdminPanel/ISAdminPanelUI"
 
 EZPZ = EZPZ or {}
 EZPZ.VERSION = EZPZ.VERSION or "0.2.0"
@@ -32,6 +33,9 @@ end
 local function fontH(font) return getTextManager():getFontHeight(font) end
 local function textW(font, s) return getTextManager():MeasureStringX(font, s) end
 
+local PAD = 12                                     -- space around and between things
+local function btnH() return fontH(UIFont.Small) + 8 end
+
 local function pad2(n) n = math.floor(n); if n < 10 then return "0" .. n end return tostring(n) end
 
 -- "3d 4h", "5:02:09", "12:34"
@@ -44,19 +48,6 @@ local function clock(secs)
     local s = secs % 60
     if h > 0 then return h .. ":" .. pad2(m) .. ":" .. pad2(s) end
     return m .. ":" .. pad2(s)
-end
-
-local function isStaff()
-    if try(function() return isAdmin() end) then return true end
-    local p = getPlayer()
-    if not p then return false end
-    local role = try(function() local r = p:getRole(); return r and r:getName() end)
-    if role then
-        role = string.lower(tostring(role))
-        return role == "admin" or role == "moderator" or role == "overseer" or role == "gm"
-    end
-    local al = try(function() return p:getAccessLevel() end)
-    return al ~= nil and tostring(al) ~= "" and string.lower(tostring(al)) ~= "none"
 end
 
 local function anyPreview()
@@ -249,7 +240,7 @@ end
 EZPZReward = ISPanel:derive("EZPZReward")
 
 function EZPZReward:new()
-    local o = ISPanel:new(0, 0, 440, fontH(UIFont.Medium) * 2 + fontH(UIFont.Small) + 70)
+    local o = ISPanel:new(0, 0, 440, PAD + fontH(UIFont.Medium) * 2 + fontH(UIFont.Small) + 8 + PAD + btnH() + PAD)
     setmetatable(o, self)
     self.__index = self
     o.background = true
@@ -261,13 +252,14 @@ function EZPZReward:new()
 end
 
 function EZPZReward:createChildren()
-    self.ok = ISButton:new(self.width / 2 - 40, self.height - 32, 80, 22, "OK", self, EZPZReward.close)
+    local w = textW(UIFont.Small, "OK") + 60
+    self.ok = ISButton:new((self.width - w) / 2, self.height - PAD - btnH(), w, btnH(), "OK", self, EZPZReward.close)
     self.ok:initialise()
     self:addChild(self.ok)
 end
 
 function EZPZReward:render()
-    local y = 12
+    local y = PAD
     self:drawTextCentre("A reward from last season", self.width / 2, y, 1, 0.82, 0.3, 1, UIFont.Medium)
     y = y + fontH(UIFont.Medium) + 6
     self:drawTextCentre(self.item, self.width / 2, y, 1, 1, 1, 1, UIFont.Medium)
@@ -296,8 +288,10 @@ local PREVIEWS = {
     { key = "reward", label = "Reward notice" },
 }
 
+local ADMIN_TITLE = "Previews show sample data, on your screen only."
+
 function EZPZAdmin:new()
-    local o = ISPanel:new(0, 0, 320, 70 + #PREVIEWS * 28 + 64)
+    local o = ISPanel:new(0, 0, 360, 200)
     setmetatable(o, self)
     self.__index = self
     o.background = true
@@ -309,35 +303,46 @@ function EZPZAdmin:new()
 end
 
 function EZPZAdmin:createChildren()
-    local y = 44
+    -- as wide as the longest line needs
+    local w = textW(UIFont.Medium, "EZPZ Server Tools " .. (EZPZ.VERSION or ""))
+    w = math.max(w, textW(UIFont.Small, ADMIN_TITLE))
+    for _, p in ipairs(PREVIEWS) do w = math.max(w, textW(UIFont.Small, "[off]   " .. p.label) + 40) end
+    local hideW = textW(UIFont.Small, "Hide all previews") + 30
+    local closeW = textW(UIFont.Small, "Close") + 40
+    w = math.max(w, hideW + closeW + PAD)
+    self:setWidth(w + PAD * 2)
+
+    local y = PAD + fontH(UIFont.Medium) + 4 + fontH(UIFont.Small) + PAD
     for i, p in ipairs(PREVIEWS) do
-        local b = ISButton:new(12, y, self.width - 24, 22, "", self, EZPZAdmin.toggle)
+        local b = ISButton:new(PAD, y, w, btnH(), "", self, EZPZAdmin.toggle)
         b.internal = p.key
         b:initialise()
         self:addChild(b)
         self.buttons[i] = b
-        y = y + 28
+        y = y + btnH() + 6
     end
-    y = y + 6
-    local hide = ISButton:new(12, y, 150, 22, "Hide all previews", self, EZPZAdmin.hideAll)
+    y = y + PAD
+    local hide = ISButton:new(PAD, y, hideW, btnH(), "Hide all previews", self, EZPZAdmin.hideAll)
     hide:initialise()
     self:addChild(hide)
-    local close = ISButton:new(self.width - 92, y, 80, 22, "Close", self, EZPZAdmin.close)
+    local close = ISButton:new(self.width - PAD - closeW, y, closeW, btnH(), "Close", self, EZPZAdmin.close)
     close:initialise()
     self:addChild(close)
+    self:setHeight(y + btnH() + PAD)
     self:update()
 end
 
 function EZPZAdmin:update()
     for i, p in ipairs(PREVIEWS) do
         local on = EZPZ.preview[p.key]
-        self.buttons[i]:setTitle((on and "[on]   " or "[off]  ") .. p.label)
+        self.buttons[i]:setTitle((on and "[on]    " or "[off]   ") .. p.label)
+        self.buttons[i].textColor = on and { r = 0.55, g = 0.9, b = 0.45, a = 1 } or { r = 1, g = 1, b = 1, a = 1 }
     end
 end
 
 function EZPZAdmin:render()
-    self:drawText("EZPZ Server Tools " .. (EZPZ.VERSION or ""), 12, 8, 1, 0.82, 0.3, 1, UIFont.Medium)
-    self:drawText("Previews show sample data on your screen only.", 12, 8 + fontH(UIFont.Medium), 0.6, 0.62, 0.66, 1, UIFont.Small)
+    self:drawText("EZPZ Server Tools " .. (EZPZ.VERSION or ""), PAD, PAD, 1, 0.82, 0.3, 1, UIFont.Medium)
+    self:drawText(ADMIN_TITLE, PAD, PAD + fontH(UIFont.Medium) + 4, 0.6, 0.62, 0.66, 1, UIFont.Small)
 end
 
 function EZPZAdmin:toggle(button)
@@ -388,16 +393,37 @@ local function create()
     ui.season = EZPZSeason:new(); ui.season:initialise(); ui.season:addToUIManager(); ui.season:setVisible(false)
     ui.reward = EZPZReward:new(); ui.reward:initialise(); ui.reward:addToUIManager(); ui.reward:setVisible(false)
     ui.admin = EZPZAdmin:new(); ui.admin:initialise(); ui.admin:addToUIManager(); ui.admin:setVisible(false)
-    ui.adminBtn = ISButton:new(0, 6, 46, fontH(UIFont.Small) + 10, "EZPZ", nil, function()
-        local a = EZPZ.ui.admin
-        a:setX((screenW() - a.width) / 2)
-        a:setY(screenH() * 0.3)
-        a:setVisible(not a:isVisible())
-        if a:isVisible() then a:bringToTop() end
-    end)
-    ui.adminBtn:initialise()
-    ui.adminBtn:addToUIManager()
-    ui.adminBtn:setVisible(false)
+end
+
+function EZPZ.openAdmin()
+    create()
+    local a = EZPZ.ui.admin
+    a:setX((screenW() - a.width) / 2)
+    a:setY(screenH() * 0.25)
+    a:setVisible(true)
+    a:bringToTop()
+end
+
+-- An "EZPZ Server Tools" button in the game's Admin panel, just above Close.
+if ISAdminPanelUI and not EZPZ.adminPanelHooked then
+    EZPZ.adminPanelHooked = true
+    local originalCreate = ISAdminPanelUI.create
+    function ISAdminPanelUI:create()
+        originalCreate(self)
+        local ok, err = pcall(function()
+            local c = self.cancel
+            if not c then return end
+            local b = ISButton:new(11, c:getY(), self:getWidth() - 22, c:getHeight(), "EZPZ Server Tools", self, function() EZPZ.openAdmin() end)
+            b:initialise()
+            b:instantiate()
+            b.borderColor = self.buttonBorderColor
+            b.tooltip = "Preview the panels EZPZ Server Tools shows players"
+            self:addChild(b)
+            c:setY(b:getBottom() + 10)
+            self:setHeight(c:getBottom() + 11)
+        end)
+        if not ok then print("[EZPZ] couldn't add the Admin panel button: " .. tostring(err)) end
+    end
 end
 
 -- Works out what to show from the current state. Called a few times a second and on every change.
@@ -405,7 +431,6 @@ function EZPZ.refresh()
     local ui = EZPZ.ui
     if not ui.bar then return end
     local s, elapsed = current()
-    local staff = isClient() and isStaff()
 
     -- the bar: season, wipe, restart
     local parts, red, show = {}, false, false
@@ -446,8 +471,6 @@ function EZPZ.refresh()
     ui.bar:setX((screenW() - w) / 2)
     ui.bar:setVisible(show)
 
-    ui.adminBtn:setVisible(staff)
-    ui.adminBtn:setX(show and (ui.bar.x + ui.bar.width + 6) or (screenW() - ui.adminBtn.width) / 2)
     if ui.banner:isVisible() and getTimestampMs() - ui.banner.shownAt > 10000 then ui.banner:setVisible(false) end
 
     -- the season panel, under the bar
@@ -473,6 +496,8 @@ function EZPZ.refresh()
         if not ui.reward:isVisible() then
             ui.reward.item = n.item
             ui.reward.title = n.title
+            ui.reward:setWidth(math.max(440, textW(UIFont.Medium, n.item) + PAD * 4, textW(UIFont.Small, n.title) + PAD * 4))
+            if ui.reward.ok then ui.reward.ok:setX((ui.reward.width - ui.reward.ok.width) / 2) end
             ui.reward:setX((screenW() - ui.reward.width) / 2)
             ui.reward:setY(screenH() * 0.35)
             ui.reward:setVisible(true)

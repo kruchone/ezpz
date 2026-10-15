@@ -10,7 +10,7 @@ A small Build 42 mod that pairs with ezpz. It adds no items and changes nothing 
   reads it every 5 seconds and sends each player what their screen needs: a bar at the top with the restart and wipe
   countdowns (red during THE END IS NEAR), a one-time THE END IS NEAR banner, the season panel (click the bar), and a
   reward notice.
-- **For admins:** an **EZPZ** button next to the bar opens a preview pane that shows each panel with sample data, on
+- **For admins:** an **EZPZ Server Tools** button in the game's Admin panel opens a preview pane that shows each panel with sample data, on
   that admin's screen only.
 
 ```
@@ -31,6 +31,6 @@ EZPZServerTools/
    join; once it's on the Workshop their game downloads it.
 3. Add `\EZPZServerTools` to the server's `Mods=` line and restart the server.
 4. Join, wait 10-15 seconds, and look for `<data folder>\Lua\ezpz_players.json`.
-5. As an admin, click **EZPZ** at the top of the screen and turn on each preview to check the panels.
+5. As an admin, open the Admin panel, click **EZPZ Server Tools** and turn on each preview to check the panels.
 
 Data reported by a player's game could be faked by a cheater, so use it for information, not for automatic action.
