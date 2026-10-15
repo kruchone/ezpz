@@ -93,8 +93,9 @@ namespace Ezpz
             }
             SetHomeTile(4, nextRestart, Theme.Text);
 
-            var wipe = WipeSchedule.Next(S, DateTime.Now);
-            if (EndIsNear()) SetHomeTile(5, "THE END IS NEAR", Theme.Danger);
+            var wipe = UpcomingWipe();
+            if (MissedWipe() != null) SetHomeTile(5, "missed", Theme.Danger);
+            else if (EndIsNear()) SetHomeTile(5, "THE END IS NEAR", Theme.Danger);
             else SetHomeTile(5, wipe == null ? "off" : wipe.Value.ToString("ddd d MMM", CultureInfo.InvariantCulture), wipe != null && (wipe.Value - DateTime.Now).TotalHours < 24 ? Theme.Warn : Theme.Text);
 
             string lastBackup = "none";
@@ -162,7 +163,14 @@ namespace Ezpz
                 var end = SeasonEndAt().Value;
                 add("THE END IS NEAR: Season " + Season.Number + " ends with the wipe " + WipeSchedule.Until(end, DateTime.Now) + " (" + end.ToString("HH:mm") + ").", Theme.Danger, "Seasons", () => ShowPage(PSeasons));
             }
-            var wipe = WipeSchedule.Next(S, DateTime.Now);
+            var missedWipe = MissedWipe();
+            if (missedWipe != null)
+            {
+                add("The scheduled wipe due " + missedWipe.Value.ToString("dddd d MMMM 'at' HH:mm", CultureInfo.InvariantCulture) + " didn't happen because ezpz wasn't running. Wipe now, or skip it and wait for the next one?",
+                    Theme.Danger, "Wipe now", () => { var _ = WipeMissedNow(); });
+                add("Or skip the missed wipe: nothing is deleted" + (Season != null ? " and Season " + Season.Number + " keeps running" : "") + ".", Theme.Muted, "Skip it", WipeMissedSkip);
+            }
+            var wipe = UpcomingWipe();
             if (wipe != null && (wipe.Value - DateTime.Now).TotalHours < 24)
                 add("Scheduled wipe " + WipeSchedule.Until(wipe.Value, DateTime.Now) + " (" + wipe.Value.ToString("HH:mm") + "): " + WipeSchedule.Presets[S.WipePreset].ToLower() + ".", Theme.Info, "Reset & wipes", () => ShowPage(PReset));
             return list;

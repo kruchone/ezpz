@@ -20,6 +20,13 @@ namespace Ezpz
             return DateTime.TryParse(s.WipeLast, null, DateTimeStyles.RoundtripKind, out d) ? d : DateTime.MinValue;
         }
 
+        // The wipe ezpz is waiting for (MinValue if none is recorded yet). See MainForm.Wipe.
+        public static DateTime Due(AppSettings s)
+        {
+            DateTime d;
+            return DateTime.TryParse(s.WipeDue, null, DateTimeStyles.RoundtripKind, out d) ? d : DateTime.MinValue;
+        }
+
         // The next wipe after "now" (and after the last one that ran). null when scheduled wipes are off.
         public static DateTime? Next(AppSettings s, DateTime now)
         {

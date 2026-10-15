@@ -38,7 +38,7 @@ namespace Ezpz
         SeasonRecord Season { get { return S.SeasonsEnabled ? seasons.Current : null; } }
 
         // The wipe that ends the current season, if one is scheduled.
-        DateTime? SeasonEndAt() { return S.SeasonsEnabled && S.WipeEnabled ? WipeSchedule.Next(S, DateTime.Now) : null; }
+        DateTime? SeasonEndAt() { return S.SeasonsEnabled ? UpcomingWipe() : null; }   // none while a missed wipe waits for a decision
 
         bool EndIsNear()
         {
@@ -226,7 +226,7 @@ namespace Ezpz
                 if (modRestartAt != null && (restart == null || modRestartAt < restart)) restart = modRestartAt;
             }
             var season = Season;
-            var end = S.WipeEnabled ? WipeSchedule.Next(S, DateTime.Now) : null;
+            var end = UpcomingWipe();
             var notices = seasons.Rewards.Where(r => r.Delivered != "" && (DateTime.Now - DateTime.Parse(r.Delivered, null, DateTimeStyles.RoundtripKind)).TotalMinutes < 15)
                 .Select(r => r.Player + "|" + ItemName(r.Item) + "|" + r.Title + " of Season " + r.Season);
             string text = Ladder.ModFile(S, season, season != null && LadderVisible() ? standings : null, end, restart, season != null && LadderVisible(), notices);

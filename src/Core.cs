@@ -57,6 +57,7 @@ namespace Ezpz
         public int WipePreset = 0;                     // 0 = new world, 1 = fresh map keep characters, 2 = new world + wipe accounts
         public bool WipeStartAfter = true;
         public string WipeLast = "";                   // when the last scheduled wipe ran ("o" format)
+        public string WipeDue = "";                    // the wipe ezpz is waiting for; in the past = it was missed
         public bool DiscordBotEnable = false;          // ezpz's own bot connection: commands and whitelist requests
         public string DiscordAdminRole = "";           // role name allowed to run admin commands (besides Administrators)
         public string DiscordRequestChannel = "";      // channel name where whitelist requests are posted for admins
