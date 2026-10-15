@@ -354,6 +354,7 @@ namespace Ezpz
             S.MinRamGB = (int)nMinRam.Value;
             S.MaxRamGB = (int)nMaxRam.Value;
             S.Save();
+            SyncMemoryFields();
             if (announce) Log("[ezpz] Settings saved.");
             RefreshAll();
             return true;

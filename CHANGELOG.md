@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Server memory (start and max) can now also be set on **Performance**, right under the memory verdict, and in the setup wizard's first step, which suggests a size for this PC. All three places stay in step.
 - **Setup wizard** for each new server (and on first run): the Setup page's steps one at a time, each showing only what it needs: name and admin password, install, create the config, firewall, the basics players see (optional), router ports (optional), first start. Progress shows in the wizard. **Skip to the full app** at any point.
 - Setup's last step, **Start the server for the first time**, now turns green on the first real start and stays green, and the checklist says **Setup complete**. Generating the default config doesn't count. Home shows "start the server for the first time" until then.
 - **A tidier menu.** Pages are grouped by job, without numbers: Home; **Live** (Players, Map, Console, Logs, Performance); **World** (Events & weather, World rules); **Server** (Settings, Mods, Discord, Backups, Reset & wipes, Setup). Configure is now **Settings**, Sandbox **World rules**, World & Weather **Events & weather**, Players & Admin **Players**, and Reset **Reset & wipes**.

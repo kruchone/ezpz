@@ -22,6 +22,7 @@ namespace Ezpz
 
         // step 1 fields
         TextBox wzName, wzPw, wzInstall, wzData;
+        NumericUpDown wzMem;
         ComboBox wzBranch;
         // step 5 fields
         TextBox wzPublic, wzJoinPw;
@@ -192,6 +193,10 @@ namespace Ezpz
                     WHint("Where the server program goes (about 4 GB).");
                     wzData = WRow("Data folder", Theme.Box(S.DataDir), 420);
                     WHint("World saves, settings, accounts and logs.");
+                    int suggest = S.IsSaved ? S.MaxRamGB : SuggestedMaxGB();
+                    wzMem = WRow("Server memory (GB)", Theme.Num(2, 128, suggest), 80);
+                    double pcGB = new Microsoft.VisualBasic.Devices.ComputerInfo().TotalPhysicalMemory / (1024.0 * 1024 * 1024);
+                    WHint("The most memory the server may use. This PC has " + pcGB.ToString("0") + " GB; " + SuggestedMaxGB() + " GB leaves enough for Windows. 8 GB suits a few friends; big or modded worlds want more. You can change it later on the Performance page.");
                     break;
                 case 1:
                     WText("ezpz downloads the free Project Zomboid dedicated server through Valve's SteamCMD, with an anonymous login: no Steam account needed. It's about 4 GB and can take a while.");
@@ -256,6 +261,8 @@ namespace Ezpz
                 tbAdminPw.Text = wzPw.Text;
                 tbInstall.Text = wzInstall.Text.Trim();
                 tbData.Text = wzData.Text.Trim();
+                nMaxRam.Value = Math.Max(nMaxRam.Minimum, Math.Min(nMaxRam.Maximum, wzMem.Value));
+                if (nMinRam.Value > nMaxRam.Value) nMinRam.Value = Math.Max(nMinRam.Minimum, Math.Min(4, nMaxRam.Value));
                 if (wzPw.Text.Length == 0) { Warn("Choose an admin password."); return; }
                 if (!SaveSetup(true)) return;
             }

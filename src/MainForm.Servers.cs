@@ -120,6 +120,7 @@ namespace Ezpz
             cbBranch.Text = S.Branch;
             nMinRam.Value = Math.Max(nMinRam.Minimum, Math.Min(nMinRam.Maximum, S.MinRamGB));
             nMaxRam.Value = Math.Max(nMaxRam.Minimum, Math.Min(nMaxRam.Maximum, S.MaxRamGB));
+            SyncMemoryFields();
             chkAutoRestart.Checked = S.AutoRestart;
             numRestartHours.Value = Math.Max(numRestartHours.Minimum, Math.Min(numRestartHours.Maximum, S.RestartHours));
             chkUpdateOnRestart.Checked = S.UpdateOnRestart;

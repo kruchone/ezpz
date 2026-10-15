@@ -17,6 +17,7 @@ namespace Ezpz
     public partial class MainForm
     {
         Panel pgHome;
+        NumericUpDown nPerfMin, nPerfMax;
         Page pgPerf;
         FlowLayoutPanel attention, homeTiles;
         Label lblHomeStatus, lblHomeSub, lblUpdate;
@@ -119,6 +120,12 @@ namespace Ezpz
             lblVerdict = new Label { AutoSize = true, Font = new Font("Segoe UI Semibold", 15f), ForeColor = Theme.Text, MaximumSize = new Size(Page.Wide, 0) };
             p.Add(lblVerdict, 32);
             lblVerdictDetail = Fixed(p, 62, Theme.Text);
+            nPerfMin = p.Row("Memory: start (GB)", Theme.Num(1, 128, S.MinRamGB), 80);
+            nPerfMax = p.Row("Memory: max (GB)", Theme.Num(2, 128, S.MaxRamGB), 80);
+            p.Hint("How much memory Java gives the server. Changes apply at the next start. The same settings are on the Setup page.");
+            var saveMem = Theme.Btn("Save memory settings", Theme.AccentBtn);
+            saveMem.Click += (s, e) => SaveMemory((int)nPerfMin.Value, (int)nPerfMax.Value, true);
+            p.Buttons(saveMem);
             p.P("In use after each Java memory cleanup:", Theme.Muted);
             heapChart = new HeapChart { Size = new Size(Page.Wide, 210) };
             p.Add(heapChart, 210);
@@ -192,6 +199,39 @@ namespace Ezpz
             // Metrics endpoint: cheap and silent, so every 5 s. The console "stats" fallback is logged by PZ, so once a minute.
             if (server.State == ServerState.Running) { if ((DateTime.Now - lastStatsPoll).TotalSeconds >= (server.MetricsPort > 0 ? 5 : 60)) PollLiveStats(); }
             else UpdateTiles(false);
+        }
+
+        // Memory settings from Performance or the wizard: kept in step with the Setup page's fields.
+        bool SaveMemory(int min, int max, bool offerRestart)
+        {
+            if (max < min) { Warn("The max memory must be at least the start memory."); return false; }
+            var ci = new Microsoft.VisualBasic.Devices.ComputerInfo();
+            double totalGB = ci.TotalPhysicalMemory / (1024.0 * 1024 * 1024);
+            if (max > totalGB - 2 && !Confirm("This PC has " + totalGB.ToString("0") + " GB of memory. A max of " + max + " GB leaves too little for Windows and can make the PC and the server crawl. Save anyway?")) return false;
+            S.MinRamGB = min; S.MaxRamGB = max;
+            S.Save();
+            SyncMemoryFields();
+            Log("[ezpz] Memory set to start " + min + " GB, max " + max + " GB. It applies at the next start.");
+            if (offerRestart && server.State == ServerState.Running && Confirm("Saved. Memory changes apply when the server restarts. Restart it now?")) { var _ = RestartFlow(false); }
+            return true;
+        }
+
+        void SyncMemoryFields()
+        {
+            foreach (var pair in new[] { new[] { nMinRam, nMaxRam }, new[] { nPerfMin, nPerfMax } })
+            {
+                if (pair[0] == null) continue;
+                pair[0].Value = Math.Max(pair[0].Minimum, Math.Min(pair[0].Maximum, S.MinRamGB));
+                pair[1].Value = Math.Max(pair[1].Minimum, Math.Min(pair[1].Maximum, S.MaxRamGB));
+            }
+        }
+
+        // A sensible max for this PC: leave Windows at least 4 GB, and don't go past 16 GB for a start.
+        static int SuggestedMaxGB()
+        {
+            double total = new Microsoft.VisualBasic.Devices.ComputerInfo().TotalPhysicalMemory / (1024.0 * 1024 * 1024);
+            int gb = (int)Math.Floor(total - 4);
+            return Math.Max(3, Math.Min(16, gb >= 10 ? 8 + (gb - 10) / 2 : gb));
         }
 
         // ---------- status
