@@ -158,6 +158,27 @@ namespace Ezpz
         }
 
         // Returns human-readable findings; the first line says whether the token works.
+        // View Channels, Send Messages, Embed Links, Read Message History: what the chat bridge and ezpz's bot use.
+        public const long InvitePermissions = 1024 | 2048 | 16384 | 65536;
+
+        // The link that adds the bot to a Discord server with the scopes and permissions both bots need.
+        // The application id comes from the token, so nobody has to dig through the developer portal.
+        public static string InviteUrl(string token)
+        {
+            token = (token ?? "").Trim();
+            if (token == "") throw new Exception("Paste the bot token first (step 2).");
+            object app;
+            try { app = Get(token, "/oauth2/applications/@me"); }
+            catch (WebException ex)
+            {
+                var r = ex.Response as HttpWebResponse;
+                throw new Exception(r != null && r.StatusCode == HttpStatusCode.Unauthorized
+                    ? "Discord rejected the token. Copy it again from the Bot tab (Reset Token gives a new one)."
+                    : "Couldn't reach Discord: " + ex.Message);
+            }
+            return "https://discord.com/oauth2/authorize?client_id=" + Str(app, "id") + "&scope=bot%20applications.commands&permissions=" + InvitePermissions;
+        }
+
         public static List<string> Run(string token, string[] channelNames)
         {
             var lines = new List<string>();

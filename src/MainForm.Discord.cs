@@ -48,7 +48,7 @@ namespace Ezpz
             Step(p, "1.  Open the Discord Developer Portal and click New Application. Name it after your server.", "Discord Developer Portal", "https://discord.com/developers/applications");
             Step(p, "2.  In the Bot tab, click Reset Token, then Copy, and paste it into Bot token below. Treat it like a password: anyone with it controls the bot.", null, null);
             Step(p, "3.  Still in the Bot tab, under Privileged Gateway Intents, turn on Message Content Intent and click Save. Without it, chat from Discord can't reach the game.", null, null);
-            Step(p, "4.  In OAuth2 → URL Generator, tick the scopes \"bot\" and \"applications.commands\", then the permissions View Channels, Send Messages, Read Message History and Embed Links. Open the generated link, pick your Discord server and click Authorize.", null, null);
+            Step(p, "4.  Click Invite bot below. ezpz builds the invite link with everything the bot needs and opens it in your browser: pick your Discord server and click Authorize.", null, null);
             Step(p, "5.  In your Discord server, create text channels for the bridge (for example pz-chat, pz-log and pz-commands) and type their names below exactly, without the #. Make the commands channel visible to admins only: messages there run as server commands.", null, null);
             Step(p, "6.  Save, click Check setup, then restart the server.", null, null);
             p.Y += 6;
@@ -71,7 +71,9 @@ namespace Ezpz
             saveBot.Click += (s, e) => SaveDiscordAll();
             var check = Theme.Btn("Check setup");
             check.Click += async (s, e) => await CheckDiscordBot();
-            p.Buttons(saveBot, check);
+            var invite = Theme.Btn("Invite bot");
+            invite.Click += async (s, e) => await InviteBot();
+            p.Buttons(saveBot, check, invite);
             lblDcCheck = Fixed(p, 120, Theme.Muted);
             p.P("The game reads the token from the server's .ini file, so it's stored there in plain text. Don't share that file.");
 
@@ -111,7 +113,7 @@ namespace Ezpz
             // ---------------------------------------------------------------- ezpz's bot
             p.H2("3. Discord commands and whitelist requests (ezpz's bot)");
             p.P("ezpz connects with the same bot as the chat bridge (the bot token in section 1), so there's nothing new to create. It adds slash commands to your Discord server. Everyone can use /status, and players ask for an account with /whitelist. /start, /restart and /backup are for admins. ezpz has to be running for them to work, but the game server doesn't.");
-            p.P("If you invited the bot before this was added, open the invite link from step 4 again with \"applications.commands\" ticked, or the commands won't show up.");
+            p.P("If you invited the bot before this was added, click Invite bot in section 1 again so the commands show up.");
             chkBotEnable = Theme.Check("Turn on ezpz's bot", false);
             p.Add(chkBotEnable, 24);
             tbAdminRole = p.Row("Admin role name", Theme.Box(""), 240);
@@ -252,6 +254,28 @@ namespace Ezpz
             catch (Exception ex) { result = new List<string> { "✕ " + ex.Message }; }
             lblDcCheck.Text = string.Join("\n", result);
             lblDcCheck.ForeColor = result.Any(l => l.StartsWith("✕")) ? Theme.Warn : Theme.Accent;
+        }
+
+        // Opens (and copies) the invite link for the bot token in the box.
+        async Task InviteBot()
+        {
+            lblDcCheck.ForeColor = Theme.Muted;
+            lblDcCheck.Text = "Asking Discord for the bot's id…";
+            string token = tbDcToken.Text;
+            try
+            {
+                string url = await Task.Run(() => DiscordBotCheck.InviteUrl(token));
+                try { Clipboard.SetText(url); } catch { }
+                Util.OpenUrl(url);
+                lblDcCheck.ForeColor = Theme.Accent;
+                lblDcCheck.Text = "Opened the invite link in your browser (it's also copied). Pick your Discord server and click Authorize.\n"
+                    + "It asks for View Channels, Send Messages, Read Message History and Embed Links, plus slash commands. If the bot is already in your server, this just updates what it's allowed to do.";
+            }
+            catch (Exception ex)
+            {
+                lblDcCheck.ForeColor = Theme.Warn;
+                lblDcCheck.Text = "✕ " + ex.Message;
+            }
         }
 
         bool ReadWebhookForm(out string url)
