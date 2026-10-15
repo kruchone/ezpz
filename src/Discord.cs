@@ -27,6 +27,7 @@ namespace Ezpz
         Milestones = 1024,  // "Rick has survived 30 days"
         Tickets = 2048,     // a player filed a ticket in game
         Wipes = 4096,       // scheduled wipe warnings and "fresh world is up"
+        Seasons = 8192,     // weekly standings, THE END IS NEAR, season results
     }
 
     // Posts to a Discord webhook. One message at a time, honouring Discord's rate limits.

@@ -250,6 +250,7 @@ namespace Ezpz
             Cmd("restart", "Restart the server, warning players in game first (admins)",
                 Opt(4, "minutes", "Minutes of warning before the restart (default 5, 0 = now)", false)),
             Cmd("backup", "Back up the world now (admins)"),
+            Cmd("ladder", "This season's standings: the top 10 and your rank"),
             Cmd("whitelist", "Ask for an account on the server",
                 Opt(3, "username", "The username you want to log in with", true)),
         };

@@ -260,6 +260,7 @@ namespace Ezpz
                 catalog = t.Result;
                 ShowPickedName(itemPicker, lblItemName);
                 ShowPickedName(vehiclePicker, lblVehicleName);
+                ShowRewardNames();
             }));
         }
 

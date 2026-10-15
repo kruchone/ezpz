@@ -124,6 +124,9 @@ namespace Ezpz
                     case "status":
                         b.Reply(it, 4, DiscordBot.Message(null, OnUi(() => StatusEmbed()), false, null)).Wait();
                         return;
+                    case "ladder":
+                        b.Reply(it, 4, DiscordBot.Message(null, OnUi(() => LadderEmbed(who)), false, null)).Wait();
+                        return;
                     case "whitelist":
                         string want;
                         opts.TryGetValue("username", out want);

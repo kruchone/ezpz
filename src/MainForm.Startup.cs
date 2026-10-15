@@ -16,7 +16,7 @@ namespace Ezpz
             var steps = new List<KeyValuePair<string, Action>>
             {
                 Step("Checking whether the server is already running", () => server.DetectExisting()),
-                Step("Reading the server's settings", () => { LoadConfig(); LoadDiscordState(); RefreshDiscord(); }),
+                Step("Reading the server's settings", () => { LoadConfig(); LoadDiscordState(); LoadSeasons(); RefreshDiscord(); }),
                 Step("Loading players", () =>
                 {
                     roster = GameData.ReadRoster(S);
@@ -31,7 +31,7 @@ namespace Ezpz
                     feed.Poll(S, out rebuilt);
                 }),
                 Step("Loading mods", () => RefreshMods(false)),
-                Step("Loading item and vehicle names", () => { catalog = ItemCatalog.Load(S); ShowPickedName(itemPicker, lblItemName); ShowPickedName(vehiclePicker, lblVehicleName); }),
+                Step("Loading item and vehicle names", () => { catalog = ItemCatalog.Load(S); ShowPickedName(itemPicker, lblItemName); ShowPickedName(vehiclePicker, lblVehicleName); ShowRewardNames(); }),
                 Step("Loading world rules (sandbox)", () => RefreshSandbox(false)),
                 Step("Reading the world's radio and memory history", () =>
                 {

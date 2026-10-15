@@ -81,6 +81,7 @@ namespace Ezpz
             BuildDiscord();
             BuildBackups();
             BuildReset();
+            BuildSeasons();
             BuildNav();
             NoMnemonics(this);
 
@@ -160,6 +161,8 @@ namespace Ezpz
             new object[] { -1, "SERVER" },
             new object[] { PConfig, "Settings" }, new object[] { PMods, "Mods" }, new object[] { PDiscord, "Discord" }, new object[] { PBackups, "Backups" },
             new object[] { PReset, "Reset & wipes" }, new object[] { PSetup, "Setup" },
+            new object[] { -1, "EXTRA" },
+            new object[] { PSeasons, "Seasons" },
         };
 
         void BuildNav()
@@ -192,8 +195,8 @@ namespace Ezpz
         }
 
         // Page numbers, in nav order.
-        const int PHome = 0, PSetup = 1, PConfig = 2, PSandbox = 3, PMods = 4, PConsole = 5, PLogs = 6, PPlayers = 7, PMap = 8, PWorld = 9, PDiscord = 10, PBackups = 11, PReset = 12, PPerf = 13;
-        const int PCount = 14;
+        const int PHome = 0, PSetup = 1, PConfig = 2, PSandbox = 3, PMods = 4, PConsole = 5, PLogs = 6, PPlayers = 7, PMap = 8, PWorld = 9, PDiscord = 10, PBackups = 11, PReset = 12, PPerf = 13, PSeasons = 14;
+        const int PCount = 15;
 
         public int StartPage;
         int currentPage = -1;
@@ -201,7 +204,7 @@ namespace Ezpz
         {
             if (i != currentPage && !LeaveCheck()) return;
             currentPage = i;
-            Control[] all = { pgHome, pgSetup, pgConfig, pgSandbox, pgMods, pgConsole, pgLogs, pgPlayers, pgMap, pgWorld, pgDiscord, pgBackups, pgReset, pgPerf };
+            Control[] all = { pgHome, pgSetup, pgConfig, pgSandbox, pgMods, pgConsole, pgLogs, pgPlayers, pgMap, pgWorld, pgDiscord, pgBackups, pgReset, pgPerf, pgSeasons };
             for (int k = 0; k < all.Length; k++)
             {
                 all[k].Visible = k == i;
@@ -219,6 +222,7 @@ namespace Ezpz
             if (i == PDiscord) RefreshDiscord();
             if (i == PBackups) RefreshBackupList();
             if (i == PReset) UpdateResetPreview();
+            if (i == PSeasons) { RefreshCatalog(); ShowSeasonPage(); }
         }
 
         Page NewPage()
@@ -635,6 +639,7 @@ namespace Ezpz
             if (currentPage == PDiscord && DiscordDirty()) return AskSave("Discord settings", SaveDiscordAll, RefreshDiscord);
             if (currentPage == PConfig && ConfigDirty()) return AskSave("server settings", SaveConfig, LoadConfig);
             if (currentPage == PReset && WipeDirty()) return AskSave("wipe schedule", SaveWipeSchedule, LoadWipeControls);
+            if (currentPage == PSeasons && SeasonsSettingsDirty()) return AskSave("seasons settings", SaveSeasonSettings, LoadSeasonControls);
             return true;
         }
 
@@ -982,8 +987,11 @@ namespace Ezpz
             var plan = CurrentPlan();
             if (plan.Targets(S).Count == 0) { Info("Nothing to delete."); return; }
             if (!ckBackupFirst.Checked && !Confirm("You turned off the backup. This reset CANNOT be undone. Continue?")) return;
+            var endSeason = AskEndSeason(plan);
+            if (endSeason == null) return;
             if (!await EnsureStopped("reset")) return;
             if (ckBackupFirst.Checked && !await BackupFlow("pre-reset")) { Warn("Reset cancelled because the backup failed."); return; }
+            if (endSeason == true) await FinalizeSeason(DateTime.Now, "manual reset");
             if (!BeginBusy("Resetting…")) return;
             try
             {

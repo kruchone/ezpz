@@ -53,6 +53,7 @@ namespace Ezpz
         public int Number = 1;
         public string Start = "", End = "", EndReason = "";
         public bool ModSeen;                         // EZPZ Server Tools reported during this season
+        public bool FreshStart;                      // began with a wipe, so every kill counter starts at zero
         public Dictionary<string, SeasonPlayer> Players = new Dictionary<string, SeasonPlayer>(StringComparer.OrdinalIgnoreCase);
         public List<AuditEntry> Audit = new List<AuditEntry>();
         public List<string> EndNearSteps = new List<string>();   // announcements already made

@@ -94,7 +94,8 @@ namespace Ezpz
             SetHomeTile(4, nextRestart, Theme.Text);
 
             var wipe = WipeSchedule.Next(S, DateTime.Now);
-            SetHomeTile(5, wipe == null ? "off" : wipe.Value.ToString("ddd d MMM", CultureInfo.InvariantCulture), wipe != null && (wipe.Value - DateTime.Now).TotalHours < 24 ? Theme.Warn : Theme.Text);
+            if (EndIsNear()) SetHomeTile(5, "THE END IS NEAR", Theme.Danger);
+            else SetHomeTile(5, wipe == null ? "off" : wipe.Value.ToString("ddd d MMM", CultureInfo.InvariantCulture), wipe != null && (wipe.Value - DateTime.Now).TotalHours < 24 ? Theme.Warn : Theme.Text);
 
             string lastBackup = "none";
             try
@@ -156,6 +157,11 @@ namespace Ezpz
             }
             else botDownSince = DateTime.MinValue;
 
+            if (EndIsNear())
+            {
+                var end = SeasonEndAt().Value;
+                add("THE END IS NEAR: Season " + Season.Number + " ends with the wipe " + WipeSchedule.Until(end, DateTime.Now) + " (" + end.ToString("HH:mm") + ").", Theme.Danger, "Seasons", () => ShowPage(PSeasons));
+            }
             var wipe = WipeSchedule.Next(S, DateTime.Now);
             if (wipe != null && (wipe.Value - DateTime.Now).TotalHours < 24)
                 add("Scheduled wipe " + WipeSchedule.Until(wipe.Value, DateTime.Now) + " (" + wipe.Value.ToString("HH:mm") + "): " + WipeSchedule.Presets[S.WipePreset].ToLower() + ".", Theme.Info, "Reset & wipes", () => ShowPage(PReset));
