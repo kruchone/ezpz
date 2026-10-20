@@ -20,6 +20,7 @@ EZPZServerTools/
   42/media/lua/client/EZPZ_UI.lua       the on-screen panels and the admin preview pane
   42/media/lua/server/EZPZ_Server.lua   writes ezpz_players.json and ezpz_events.json, reads ezpz_season.txt,
                                         sends each player their state (sendServerCommand "EZPZ" / "state")
+  42/poster.png                         the picture in the game's mod list
   common/                               required by Build 42
 ```
 
@@ -34,3 +35,10 @@ EZPZServerTools/
 5. As an admin, open the Admin panel, click **EZPZ Server Tools** and turn on each preview to check the panels.
 
 Data reported by a player's game could be faked by a cheater, so use it for information, not for automatic action.
+
+## Packaging
+
+`.\mod\package.ps1` builds `dist\EZPZServerTools-<version>.zip`, which holds the mod, `install.cmd` (copies it into
+`%USERPROFILE%\Zomboid\mods`, or into `<data folder>\mods` when given a data folder) and a README for players and
+server admins. With `-Workshop` it also stages `%USERPROFILE%\Zomboid\Workshop\EZPZServerTools` for the game's
+Workshop uploader (main menu > Workshop). The script never uploads anything.
