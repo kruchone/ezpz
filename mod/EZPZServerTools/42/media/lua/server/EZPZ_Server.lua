@@ -7,7 +7,7 @@
 if not isServer() then return end
 
 EZPZ = EZPZ or {}
-EZPZ.VERSION = "0.2.0"
+EZPZ.VERSION = "0.3.0"
 EZPZ.WRITE_MS = 5000
 EZPZ.STALE_MS = 60000
 EZPZ.SEASON_MS = 5000
@@ -169,6 +169,10 @@ local function stateFor(d, name, now)
         local start = tonumber(d.seasonStart) or 0
         s.day = start > 0 and math.floor((now - start) / 86400000) + 1 or 0
         s.ladder = d.ladder == "1"
+        if d.extract then   -- last helicopter out: "x,y,radius"
+            local f = split(d.extract, ",")
+            if tonumber(f[1]) and tonumber(f[2]) then s.extract = { x = tonumber(f[1]), y = tonumber(f[2]), r = tonumber(f[3]) or 50 } end
+        end
         if s.ladder then
             local top = {}
             for i = 1, math.min(5, #d.rows) do

@@ -21,6 +21,7 @@ namespace Ezpz
         public List<string> Cells = new List<string>();   // 100x100 map areas visited, "x,y"
         public int PvpKills;
         public double Adjust;            // admin adjustment to the Survivor Score, in points
+        public double FinaleKills;       // kills during THE END IS NEAR with double points on (counted again)
         public bool Disqualified;
         public string DqReason = "";
 
@@ -57,6 +58,11 @@ namespace Ezpz
         public Dictionary<string, SeasonPlayer> Players = new Dictionary<string, SeasonPlayer>(StringComparer.OrdinalIgnoreCase);
         public List<AuditEntry> Audit = new List<AuditEntry>();
         public List<string> EndNearSteps = new List<string>();   // announcements already made
+        public string FinaleStart = "";                          // when THE END IS NEAR began
+        public int FinaleStage;                                  // the finale stage last announced (see MainForm.Finale)
+        public string Extraction = "";                           // "x,y" of the last helicopter out, once announced
+        public List<string> Evacuated = new List<string>();      // living characters at the extraction point at the wipe
+        public DateTime FinaleStartTime { get { return Parse(FinaleStart); } }
         public List<Standing> Final = new List<Standing>();      // set when the season ends
         public Dictionary<string, string> Titles = new Dictionary<string, string>();   // title -> player
 
@@ -180,6 +186,8 @@ namespace Ezpz
         public static List<Standing> Compute(AppSettings s, SeasonRecord season, DateTime until, ICollection<string> alive, IDictionary<string, string> roles)
         {
             DateTime from = season.StartTime;
+            // double points: what happens during THE END IS NEAR counts twice
+            DateTime doubleFrom = s.FinaleDoublePoints && season.FinaleStart != "" ? season.FinaleStartTime : DateTime.MaxValue;
             var raw = new Dictionary<string, Raw>(StringComparer.OrdinalIgnoreCase);
             Func<string, Raw> R = n => { Raw r; if (!raw.TryGetValue(n, out r)) { r = new Raw(); raw[n] = r; } return r; };
 
@@ -203,7 +211,7 @@ namespace Ezpz
                         r.LastHours = h;
                     }
                     if (b[4] == "Died") r.Deaths++;
-                    else if (b[4] == "Level Changed") r.Levels++;
+                    else if (b[4] == "Level Changed") r.Levels += doubleFrom <= t ? 2 : 1;
                 }
 
             // playtime from the connection log: fully-connected .. disconnect (or the end of that run's log)
@@ -249,7 +257,7 @@ namespace Ezpz
                     }
 
             foreach (var p in season.Players.Values) R(p.Name).Seen = true;
-            var pvp = PvpKills(s, from, until);
+            var pvp = PvpKills(s, from, until, doubleFrom);
 
             var w = Weights(s);
             var active = Active(s, season);
@@ -260,14 +268,15 @@ namespace Ezpz
                 season.Players.TryGetValue(kv.Key, out sp);
                 var r = kv.Value;
                 var st = new Standing { Name = kv.Key, HoursPlayed = r.Played };
-                double kills = sp != null ? sp.Kills : 0;
+                double kills = sp != null ? sp.Kills + sp.FinaleKills : 0;
                 if (r.Played > 0) kills = Math.Min(kills, s.SeasonKillCap * Math.Max(1, r.Played));
                 st.Raw["Endurance"] = r.MaxHours;
                 st.Raw["Skills"] = r.Levels;
                 st.Raw["Slayer"] = kills;
                 st.Raw["Explorer"] = sp != null ? sp.Cells.Count : 0;
                 st.Raw["Resilience"] = r.Played > 0 ? r.Deaths / r.Played * 10 : r.Deaths;   // deaths per 10 hours
-                st.Raw["FinalStand"] = alive != null && alive.Contains(kv.Key) ? 1 : 0;
+                // alive at the end; evacuated by the last helicopter out counts more
+                st.Raw["FinalStand"] = season.Evacuated.Contains(kv.Key, StringComparer.OrdinalIgnoreCase) ? 2 : alive != null && alive.Contains(kv.Key) ? 1 : 0;
                 int pk;
                 st.Raw["PvP"] = (pvp.TryGetValue(kv.Key, out pk) ? pk : 0) + (sp != null ? sp.PvpKills : 0);
                 string role;
@@ -311,7 +320,10 @@ namespace Ezpz
         }
 
         // Players killed by each player in the window, from EZPZ Server Tools' Lua\ezpz_events.json (one JSON object per line).
-        public static Dictionary<string, int> PvpKills(AppSettings s, DateTime from, DateTime until)
+        public static Dictionary<string, int> PvpKills(AppSettings s, DateTime from, DateTime until) { return PvpKills(s, from, until, DateTime.MaxValue); }
+
+        // doubleFrom: kills from then on count twice (double points during the finale)
+        public static Dictionary<string, int> PvpKills(AppSettings s, DateTime from, DateTime until, DateTime doubleFrom)
         {
             var d = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             string path = Path.Combine(s.DataDir, "Lua", "ezpz_events.json");
@@ -332,7 +344,7 @@ namespace Ezpz
                 if (t < from || t > until) continue;
                 int n;
                 d.TryGetValue((string)killer, out n);
-                d[(string)killer] = n + 1;
+                d[(string)killer] = n + (t >= doubleFrom ? 2 : 1);
             }
             return d;
         }
@@ -398,7 +410,7 @@ namespace Ezpz
                 case "Slayer": return v.ToString("N0");
                 case "Explorer": return v.ToString("0") + " areas";
                 case "Resilience": return v.ToString("0.0") + " /10h";
-                case "FinalStand": return v > 0 ? "alive" : "—";
+                case "FinalStand": return v > 1 ? "evacuated" : v > 0 ? "alive" : "—";
                 case "PvP": return v.ToString("0");
             }
             return v.ToString("0");
@@ -418,6 +430,8 @@ namespace Ezpz
             sb.Append("endNearAt=").Append(endAt != null ? ms(endAt.Value.AddHours(-s.SeasonEndHours)) : "0").Append('\n');
             sb.Append("restartAt=").Append(ms(restartAt)).Append('\n');
             sb.Append("ladder=").Append(showLadder ? 1 : 0).Append('\n');
+            if (season != null && s.FinaleExtraction && season.Extraction != "")
+                sb.Append("extract=").Append(season.Extraction).Append(',').Append(s.FinaleExtractionRadius).Append('\n');
             if (standings != null)
                 foreach (var st in standings.Where(x => x.Qualified).Take(50))
                     sb.Append("p|").Append(st.Name.Replace("|", "")).Append('|').Append(st.Rank).Append('|').Append(st.Score.ToString("0.0", CultureInfo.InvariantCulture))

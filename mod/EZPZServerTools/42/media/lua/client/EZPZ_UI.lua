@@ -13,7 +13,7 @@ require "ISUI/ISButton"
 require "ISUI/AdminPanel/ISAdminPanelUI"
 
 EZPZ = EZPZ or {}
-EZPZ.VERSION = EZPZ.VERSION or "0.2.0"
+EZPZ.VERSION = EZPZ.VERSION or "0.3.0"
 EZPZ.state = nil          -- the latest state from the server
 EZPZ.stateAt = 0          -- when it arrived (local ms)
 EZPZ.preview = { restart = false, wipe = false, endnear = false, season = false, reward = false }
@@ -62,7 +62,12 @@ local function sampleState()
     local s = { v = 1, season = 0 }
     if pv.restart then s.restart = 12 * 60 + 34 end
     if pv.wipe then s.wipe = 3 * 86400 + 4 * 3600 end
-    if pv.endnear then s.wipe = 5 * 3600 + 17 * 60; s.endNear = 0 end
+    if pv.endnear then
+        s.wipe = 5 * 3600 + 17 * 60
+        s.endNear = 0
+        local p = getPlayer()
+        if p then s.extract = { x = p:getX() + 900, y = p:getY() - 700, r = 50 } end   -- somewhere to the north-east
+    end
     if pv.season or pv.endnear then
         s.season = 3
         s.day = 12
@@ -94,6 +99,25 @@ end
 local function left(v, elapsed)
     if v == nil then return -1 end
     return math.max(0, v - elapsed)
+end
+
+-- "1.2 km NE" (map directions: x grows east, y grows south), or nil if the player is already there
+local function extractionText(e)
+    local p = getPlayer()
+    if not e or not p then return nil end
+    local dx, dy = e.x - p:getX(), e.y - p:getY()
+    local dist = math.sqrt(dx * dx + dy * dy)
+    if dist <= (e.r or 50) then return nil end
+    local ns = (-dy > math.abs(dx) * 0.414) and "N" or (dy > math.abs(dx) * 0.414) and "S" or ""
+    local ew = (dx > math.abs(dy) * 0.414) and "E" or (-dx > math.abs(dy) * 0.414) and "W" or ""
+    local far
+    if dist >= 1000 then
+        local tenths = math.floor(dist / 100 + 0.5)
+        far = math.floor(tenths / 10) .. "." .. (tenths % 10) .. " km"
+    else
+        far = math.floor(dist / 10 + 0.5) * 10 .. " m"
+    end
+    return far .. " " .. ns .. ew
 end
 
 local function isNear(s, elapsed)
@@ -215,6 +239,11 @@ local function seasonLines(s, elapsed)
     if wipe >= 0 then
         if near then add("THE END IS NEAR", clock(wipe), RED, nil, 8)
         else add("Ends with the wipe in", clock(wipe), MUTED, nil, 8) end
+    end
+    if s.extract then
+        local where = extractionText(s.extract)
+        add("Last helicopter out", where or "you're there", GOLD, nil, 2)
+        add("Be within " .. (s.extract.r or 50) .. " m of " .. math.floor(s.extract.x) .. "," .. math.floor(s.extract.y) .. " at the wipe.", nil, MUTED, nil, 8)
     end
     if not s.ladder then
         add("The ladder is secret until THE END IS NEAR.", nil, MUTED)
@@ -458,6 +487,10 @@ function EZPZ.refresh()
             near = isNear(s, elapsed)
             if near then
                 parts[#parts + 1] = "THE END IS NEAR   " .. clock(wipe)
+                if s.extract then
+                    local where = extractionText(s.extract)
+                    parts[#parts + 1] = where and ("extraction " .. where) or "AT THE EXTRACTION POINT"
+                end
             else
                 parts[#parts + 1] = "Season " .. s.season .. (s.day and s.day > 0 and (", day " .. s.day) or "")
                 if wipe >= 0 then parts[#parts + 1] = "wipe in " .. clock(wipe) end

@@ -49,6 +49,15 @@ namespace Ezpz
         public int SeasonEndHours = 24;                // THE END IS NEAR: real hours before the season-ending wipe
         public int SeasonWeeklyDay = 0;                // weekly Discord standings: 0 = Sunday
         public string SeasonWeeklyTime = "20:00";
+        // THE END IS NEAR, the finale (see MainForm.Finale)
+        public bool FinaleHordes = false;
+        public int FinaleHordeLevel = 1;               // 0 light, 1 heavy, 2 brutal
+        public bool FinaleStorm = false;
+        public bool FinaleChopper = false;
+        public bool FinaleExtraction = false;          // last helicopter out
+        public int FinaleExtractionRadius = 50;        // tiles
+        public string FinaleExtractionPoint = "";      // "x,y", or empty for automatic
+        public bool FinaleDoublePoints = false;
         public string SeasonRewards = "Base.Medal_Gold;Base.Medal_Silver;Base.Medal_Bronze;Base.TrophyGold";   // 1st, 2nd, 3rd, each title
         public bool WipeEnabled = false;               // scheduled wipes (see WipeSchedule)
         public int WipeRepeat = 0;                     // 0 = every month on WipeDay, 1 = every WipeWeeks weeks on WipeWeekday

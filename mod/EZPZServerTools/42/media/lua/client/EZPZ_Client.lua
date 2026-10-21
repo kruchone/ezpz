@@ -81,7 +81,7 @@ local function collect(p)
         d.driving = try(function() return v:getDriver() == p end)
     end
     d.asleep = try(function() return p:isAsleep() end)
-    d.mod = "0.2.0"
+    d.mod = "0.3.0"
     return d
 end
 

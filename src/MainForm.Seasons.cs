@@ -109,6 +109,7 @@ namespace Ezpz
                 TrackModData(season);
                 RefreshStandings(false);
                 EndNearTick(season);
+                FinaleTick(season);
                 WeeklyTick(season);
                 if (seasonsDirty && ticks % 60 < 10) SaveSeasons();
             }
@@ -124,6 +125,7 @@ namespace Ezpz
             foreach (var lp in live.Players)
             {
                 var sp = season.Player(lp.Username);
+                double killsBefore = sp.FirstKills < 0 ? -1 : sp.Kills;
                 if (sp.FirstKills < 0) { sp.FirstKills = season.FreshStart ? 0 : lp.Kills; sp.LastKills = lp.Kills; seasonsDirty = true; }
                 else if (lp.Kills < sp.LastKills)
                 {
@@ -134,6 +136,7 @@ namespace Ezpz
                     seasonsDirty = true;
                 }
                 else if (lp.Kills != sp.LastKills) { sp.LastKills = lp.Kills; seasonsDirty = true; }
+                if (killsBefore >= 0 && sp.Kills > killsBefore && S.FinaleDoublePoints && FinaleStage() > 0) sp.FinaleKills += sp.Kills - killsBefore;
                 string cell = (int)(lp.X / 100) + "," + (int)(lp.Y / 100);
                 if ((lp.X != 0 || lp.Y != 0) && !sp.Cells.Contains(cell)) { sp.Cells.Add(cell); seasonsDirty = true; }
             }
@@ -288,7 +291,9 @@ namespace Ezpz
             {
                 final = await Task.Run(() =>
                 {
-                    var alive = new HashSet<string>(ServerDb.ReadCharacters(settings).Values.Where(c => !c.Dead).Select(c => c.Username), StringComparer.OrdinalIgnoreCase);
+                    var chars = ServerDb.ReadCharacters(settings);
+                    var alive = new HashSet<string>(chars.Values.Where(c => !c.Dead).Select(c => c.Username), StringComparer.OrdinalIgnoreCase);
+                    season.Evacuated = Evacuees(settings, season, chars);
                     var roles = ServerDb.ReadAccounts(settings).GroupBy(a => a.Name, StringComparer.OrdinalIgnoreCase).ToDictionary(g => g.Key, g => g.First().Role, StringComparer.OrdinalIgnoreCase);
                     return Ladder.Compute(settings, season, end, alive, roles);
                 });
@@ -322,7 +327,9 @@ namespace Ezpz
             string titles = string.Join("\n", season.Titles.Where(x => x.Key != Ladder.ChampionTitle).Select(x => "🏆 " + x.Key + ": **" + x.Value + "**"));
             Notify(DiscordEvent.Seasons, "🏁 Season " + season.Number + " is over on " + ServerTitle(),
                 (podium.Count == 0 ? "Nobody played enough to qualify." : string.Join("\n", podium.Select(x => Medal(x.Rank) + " **" + x.Name + "** " + x.Score.ToString("0.0") + (x.Rank == 1 ? " · " + Ladder.ChampionTitle : ""))))
-                + (titles != "" ? "\n\n" + titles : "") + "\n\nSeason " + (season.Number + 1) + " starts with the fresh world. Winners get their reward when they first join.", 0xF1C40F);
+                + (titles != "" ? "\n\n" + titles : "")
+                + (season.Extraction != "" ? "\n\n🚁 Evacuated: " + (season.Evacuated.Count > 0 ? string.Join(", ", season.Evacuated.Select(n => "**" + n + "**")) : "nobody made it") : "")
+                + "\n\nSeason " + (season.Number + 1) + " starts with the fresh world. Winners get their reward when they first join.", 0xF1C40F);
             if (currentPage == PSeasons) ShowSeasonPage();
         }
 
@@ -357,7 +364,7 @@ namespace Ezpz
             p.P("A season runs from one scheduled wipe to the next. Players are ranked on a ladder by how well they survived all round, the last hours before the wipe are THE END IS NEAR, and the winners get a symbolic reward in the next season. With EZPZ Server Tools, players see the countdown and the ladder in game.");
             chkSeasons = Theme.Check("Run seasons on this server", false);
             p.Add(chkSeasons, 24);
-            lblSeasonStatus = Fixed(p, 48, Theme.Text);
+            lblSeasonStatus = Fixed(p, 66, Theme.Text);
             lblSeasonTools = Fixed(p, 40, Theme.Muted);
             MakeToolsHint(lblSeasonTools);
 
@@ -411,6 +418,8 @@ namespace Ezpz
             tbSeasonWeekly.Width = 60;
             p.Controls.Add(tbSeasonWeekly);
             p.Hint("Posted with the Seasons notification on the Discord page. Skipped while the ladder is hidden.");
+
+            BuildFinaleSection(p);
 
             p.H2("Rewards");
             p.P("A symbolic item for the winners, given when they first join in the next season: a medal for the top three, and a trophy for each player holding a category title. Pick any item; the defaults are for show only.");
@@ -475,6 +484,7 @@ namespace Ezpz
             var items = (S.SeasonRewards ?? "").Split(';');
             for (int i = 0; i < 4; i++) rewardPickers[i].Box.Text = i < items.Length ? items[i].Trim() : "";
             UpdateWeightsTotal();
+            LoadFinaleControls();
             if (currentPage == PSeasons) ShowSeasonPage();
         }
 
@@ -487,7 +497,7 @@ namespace Ezpz
             return chkSeasons.Checked != S.SeasonsEnabled || WeightsText() != string.Join(",", Ladder.Weights(S)) || (int)nSeasonMinHours.Value != S.SeasonMinHours
                 || (int)nSeasonKillCap.Value != S.SeasonKillCap || chkSeasonStaff.Checked != S.SeasonExcludeStaff || chkSeasonCheats.Checked != S.SeasonExcludeCheats
                 || chkSeasonLadder.Checked != S.SeasonShowLadder || (int)nSeasonEndHours.Value != S.SeasonEndHours || cbSeasonWeekday.SelectedIndex != S.SeasonWeeklyDay
-                || tbSeasonWeekly.Text.Trim() != S.SeasonWeeklyTime || RewardsText() != S.SeasonRewards;
+                || tbSeasonWeekly.Text.Trim() != S.SeasonWeeklyTime || RewardsText() != S.SeasonRewards || FinaleDirty();
         }
 
         void UpdateWeightsTotal()
@@ -513,6 +523,7 @@ namespace Ezpz
                 Warn("Seasons run between scheduled wipes. Turn on scheduled wipes on the Reset & wipes page first.");
                 return false;
             }
+            if (!ApplyFinaleControls()) return false;
             bool turningOn = chkSeasons.Checked && !S.SeasonsEnabled;
             S.SeasonsEnabled = chkSeasons.Checked;
             S.SeasonWeights = WeightsText();
@@ -555,7 +566,8 @@ namespace Ezpz
                 int day = (int)(DateTime.Now - season.StartTime).TotalDays + 1;
                 lblSeasonStatus.Text = "Season " + season.Number + "  ·  day " + day + "  ·  started " + season.StartTime.ToString("d MMMM HH:mm", CultureInfo.InvariantCulture)
                     + (end != null ? "\nEnds with the wipe on " + end.Value.ToString("dddd d MMMM 'at' HH:mm", CultureInfo.InvariantCulture) + " (" + WipeSchedule.Until(end.Value, DateTime.Now) + ")" : "\nNo wipe scheduled, so the season has no end yet.")
-                    + (EndIsNear() ? "  ·  THE END IS NEAR" : "");
+                    + (EndIsNear() ? "  ·  THE END IS NEAR" + (FinaleAny ? ", finale stage " + FinaleStage() + " of 3" : "") : "")
+                    + (season.Extraction != "" && S.FinaleExtraction ? "\nLast helicopter out: " + season.Extraction : "");
                 lblSeasonStatus.ForeColor = EndIsNear() ? Theme.Danger : Theme.Accent;
             }
             ShowSeasonToolsLine();
@@ -657,7 +669,8 @@ namespace Ezpz
                 string champ;
                 a.Titles.TryGetValue(Ladder.ChampionTitle, out champ);
                 lvHall.Items.Add(new ListViewItem(new[] { a.Number.ToString(), a.StartTime.ToString("d MMM yyyy") + " – " + a.EndTime.ToString("d MMM yyyy"), champ ?? "(nobody)",
-                    string.Join(", ", a.Titles.Where(x => x.Key != Ladder.ChampionTitle).Select(x => x.Key + ": " + x.Value)), a.EndReason })
+                    string.Join(", ", a.Titles.Where(x => x.Key != Ladder.ChampionTitle).Select(x => x.Key + ": " + x.Value))
+                        + (a.Evacuated.Count > 0 ? "; evacuated: " + string.Join(", ", a.Evacuated) : ""), a.EndReason })
                     { ToolTipText = string.Join("\n", a.Final.Where(x => x.Qualified).Take(10).Select(x => "#" + x.Rank + " " + x.Name + " " + x.Score.ToString("0.0"))) });
             }
             lvHall.EndUpdate();
@@ -742,6 +755,7 @@ namespace Ezpz
             season.FreshStart = false;
             season.Players.Clear();
             season.EndNearSteps.Clear();
+            season.FinaleStart = ""; season.FinaleStage = 0; season.Extraction = ""; season.Evacuated.Clear();
             standings = null;
             Audit(season, "Reset the season (it restarts from now)", before, season.Start, why, null);
             RefreshStandings(true);
