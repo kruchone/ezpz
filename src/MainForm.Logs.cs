@@ -214,7 +214,7 @@ namespace Ezpz
                         || x.Where.Contains(q))).ToList();
             lvLogs.VirtualListSize = logShown.Count;
             lvLogs.Invalidate();
-            lblLogCount.Text = logShown.Count + " of " + logAll.Count + " lines";
+            lblLogCount.Text = logShown.Count + " of " + logAll.Count + " lines (last " + LogViewerData.KeepDays + " days; older logs are in the logs folder)";
             ShowLogDetail();
         }
 

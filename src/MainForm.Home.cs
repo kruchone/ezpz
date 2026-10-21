@@ -30,6 +30,13 @@ namespace Ezpz
         HeapChart heapChart;
         FlowLayoutPanel statTiles;
         GcLogReader gcReader = new GcLogReader();
+        MemoryHistory memHistory = new MemoryHistory();
+        DateTime memSavedAt = DateTime.Now;
+        int memRange = 5;
+        readonly List<Button> memRangeButtons = new List<Button>();
+        ListView lvRuns;
+        Label lblRunsTrend;
+        static readonly string[] MemRanges = { "1 hour", "6 hours", "24 hours", "7 days", "30 days", "This run" };
         TimeSpan lastCpu;
         DateTime lastCpuAt;
         double serverCpuPct = -1;
@@ -102,6 +109,113 @@ namespace Ezpz
 
         // Performance: server version and updates, the memory verdict and chart, the game's full live numbers,
         // this PC, and anything that looks wrong. (Home shows the short version.)
+        // ---------- memory history (MemoryHistory.cs): read the GC log, keep the chart's data and a summary per run
+
+        GcStats ReadGc()
+        {
+            gcReader.History = memHistory;
+            var gc = gcReader.Read(S.GcLogPath);
+            var start = gc.RunStart != DateTime.MinValue ? gc.RunStart : server.State != ServerState.Stopped ? server.StartedAt : DateTime.MinValue;
+            memHistory.UpdateRun(start, gc);
+            if (memHistory.Dirty && (DateTime.Now - memSavedAt).TotalMinutes >= 5) SaveMemHistory();
+            return gc;
+        }
+
+        // Java keeps the last few runs' logs as gc.log.0 .. gc.log.4; read any newer than what the history already has.
+        void BackfillMemHistory()
+        {
+            try
+            {
+                string dir = Path.GetDirectoryName(S.GcLogPath);
+                if (!Directory.Exists(dir)) return;
+                var known = memHistory.Runs.Count > 0 ? memHistory.Runs.Max(r => r.EndTime) : DateTime.MinValue;
+                foreach (var f in Directory.GetFiles(dir, Path.GetFileName(S.GcLogPath) + ".*").OrderBy(File.GetLastWriteTime))
+                {
+                    if (File.GetLastWriteTime(f) <= known) continue;
+                    var r = new GcLogReader { History = memHistory };
+                    var gc = r.Read(f);
+                    memHistory.UpdateRun(gc.RunStart, gc);
+                }
+            }
+            catch (Exception ex) { AppLog.Error("reading older GC logs", ex); }
+        }
+
+        void SaveMemHistory() { memHistory.Save(S.ProfileId); memSavedAt = DateTime.Now; }
+
+        void ShowMemRangeButtons()
+        {
+            for (int i = 0; i < memRangeButtons.Count; i++) memRangeButtons[i].BackColor = i == memRange ? Theme.AccentBtn : Theme.Card;
+        }
+
+        void ShowMemChart(GcStats gc, bool running)
+        {
+            var now = DateTime.Now;
+            DateTime from, to = now;
+            switch (memRange)
+            {
+                case 0: from = now.AddHours(-1); break;
+                case 1: from = now.AddHours(-6); break;
+                case 2: from = now.AddHours(-24); break;
+                case 3: from = now.AddDays(-7); break;
+                case 4: from = now.AddDays(-30); break;
+                default:
+                    // this run, or the last one if the server is off
+                    var run = memHistory.Runs.LastOrDefault();
+                    if (run == null) { from = now.AddHours(-24); break; }
+                    from = run.StartTime;
+                    if (!running && run.EndTime > from) to = run.EndTime.AddMinutes(1);
+                    break;
+            }
+            bool fine = (now - from).TotalHours <= MemoryHistory.FineHours;
+            heapChart.SetData(memHistory.Range(from, to), from, to, fine ? MemoryHistory.FineSeconds : MemoryHistory.CoarseSeconds,
+                gc.MaxMB > 0 ? gc.MaxMB : S.MaxRamGB * 1024L, memHistory.Runs.Select(x => x.StartTime).ToList());
+        }
+
+        void ShowRuns()
+        {
+            if (lvRuns == null) return;
+            var runs = memHistory.Runs.AsEnumerable().Reverse().Take(20).ToList();
+            string sig = string.Join("|", runs.Select(r => r.Start + r.End + r.PeakMB + r.Stalls));
+            if ((string)lvRuns.Tag == sig) return;
+            lvRuns.Tag = sig;
+            lvRuns.BeginUpdate();
+            lvRuns.Items.Clear();
+            bool first = true;
+            foreach (var r in runs)
+            {
+                var len = r.EndTime - r.StartTime;
+                bool current = first && server.State != ServerState.Stopped;
+                string note = r.OutOfMemory ? "ran out of memory" : r.MaxMB > 0 && r.PeakMB > r.MaxMB * 0.85 ? "close to the max" : "";
+                if (current) note = note == "" ? "running now" : "running now, " + note;
+                var it = new ListViewItem(new[]
+                {
+                    r.StartTime.ToString("ddd d MMM HH:mm", System.Globalization.CultureInfo.InvariantCulture),
+                    len.TotalDays >= 1 ? (int)len.TotalDays + "d " + len.Hours + "h" : (int)len.TotalHours + "h " + len.Minutes.ToString("00") + "m",
+                    r.PeakMB > 0 ? Gb(r.PeakMB) : "—", r.MaxMB > 0 ? Gb(r.MaxMB) : "—", r.Stalls.ToString(), note,
+                }) { UseItemStyleForSubItems = false };
+                if (r.OutOfMemory || r.Stalls >= 3) { it.SubItems[4].ForeColor = Theme.Warn; it.SubItems[5].ForeColor = Theme.Danger; }
+                else if (note.Contains("close")) it.SubItems[5].ForeColor = Theme.Warn;
+                else it.SubItems[5].ForeColor = Theme.Muted;
+                lvRuns.Items.Add(it);
+                first = false;
+            }
+            lvRuns.EndUpdate();
+
+            // is the world needing more over time? (finished runs of at least an hour, oldest first)
+            var done = memHistory.Runs.Where(r => r.PeakMB > 0 && (r.EndTime - r.StartTime).TotalHours >= 1).Skip(Math.Max(0, memHistory.Runs.Count - 7)).ToList();
+            if (memHistory.Runs.Count == 0) lblRunsTrend.Text = "ezpz keeps a summary of each run here, so you can see whether the world needs more memory over the weeks.";
+            else if (done.Count < 3) lblRunsTrend.Text = "After a few longer runs, this shows whether the world needs more memory over time.";
+            else
+            {
+                double firstGb = done[0].PeakMB / 1024.0, lastGb = done[done.Count - 1].PeakMB / 1024.0;
+                long max = done[done.Count - 1].MaxMB;
+                lblRunsTrend.Text = "Most memory needed over the last " + done.Count + " runs: " + string.Join(" → ", done.Select(r => (r.PeakMB / 1024.0).ToString("0.0"))) + " GB."
+                    + (lastGb > firstGb * 1.25 ? " It's growing, which is normal as players explore more of the map." : lastGb < firstGb * 0.8 ? " It's come down." : " Steady.")
+                    + (max > 0 && done[done.Count - 1].PeakMB > max * 0.85 ? " The last run came close to the max: raise it above." : "");
+            }
+            lblRunsTrend.ForeColor = lblRunsTrend.Text.Contains("raise it") ? Theme.Warn : Theme.Muted;
+        }
+
         void BuildPerformance()
         {
             var p = pgPerf = NewPage();
@@ -126,11 +240,36 @@ namespace Ezpz
             var saveMem = Theme.Btn("Save memory settings", Theme.AccentBtn);
             saveMem.Click += (s, e) => SaveMemory((int)nPerfMin.Value, (int)nPerfMax.Value, true);
             p.Buttons(saveMem);
-            p.P("In use after each Java memory cleanup:", Theme.Muted);
+            p.P("In use after each Java memory cleanup. Dotted lines are restarts; gaps are when the server was off.", Theme.Muted);
+            var ranges = new List<Control>();
+            for (int i = 0; i < MemRanges.Length; i++)
+            {
+                int k = i;
+                var b = Theme.Btn(MemRanges[i]);
+                b.Click += (s, e) => { memRange = k; ShowMemRangeButtons(); RefreshHome(); };
+                memRangeButtons.Add(b);
+                ranges.Add(b);
+            }
+            p.Buttons(ranges.ToArray());
+            ShowMemRangeButtons();
             heapChart = new HeapChart { Size = new Size(Page.Wide, 210) };
             p.Add(heapChart, 210);
             lblHeapNums = Fixed(p, 44, Theme.Text);
             p.P("Windows shows the server holding most of its max all the time, because Java reserves memory up front. The line above is what the world actually needs, measured by Java.");
+            p.Add(new Label { Text = "Recent runs", AutoSize = true, ForeColor = Theme.Text, Font = Theme.Bold }, 20);
+            lvRuns = new ListView
+            {
+                View = View.Details, FullRowSelect = true, Size = new Size(Page.Wide, 150), HeaderStyle = ColumnHeaderStyle.Nonclickable,
+                BackColor = Theme.Input, ForeColor = Theme.Text, BorderStyle = BorderStyle.None, Font = new Font("Segoe UI", 9.75f),
+            };
+            lvRuns.Columns.Add("Started", 170);
+            lvRuns.Columns.Add("Ran for", 110);
+            lvRuns.Columns.Add("Most needed", 110);
+            lvRuns.Columns.Add("Max", 80);
+            lvRuns.Columns.Add("Waits for memory", 130);
+            lvRuns.Columns.Add("", 260);
+            p.Add(lvRuns, 150);
+            lblRunsTrend = Fixed(p, 44, Theme.Muted);
 
             p.H2("Live server");
             statTiles = new FlowLayoutPanel { Size = new Size(Page.Wide, 152), WrapContents = true, BackColor = Color.Transparent };
@@ -157,7 +296,7 @@ namespace Ezpz
             UpdateUpdateLabel();
             if (latestBuild == null && !checkingUpdate && updateError == null && lastUpdateCheck == DateTime.MinValue) { var _ = CheckForUpdate(false); }
 
-            var gc = gcReader.Read(S.GcLogPath);
+            var gc = ReadGc();
             bool running = server.State == ServerState.Running || server.State == ServerState.Starting;
             var ci = new Microsoft.VisualBasic.Devices.ComputerInfo();
             double totalGB = ci.TotalPhysicalMemory / (1024.0 * 1024 * 1024);
@@ -168,7 +307,7 @@ namespace Ezpz
             lblVerdict.ForeColor = v.Level == 0 ? Theme.Accent : v.Level == 1 ? Theme.Info : v.Level == 2 ? Theme.Warn : Theme.Danger;
             lblVerdictDetail.Text = v.Detail;
 
-            heapChart.SetData(gc.ChartPoints, gc.MaxMB > 0 ? gc.MaxMB : S.MaxRamGB * 1024L);
+            ShowMemChart(gc, running);
             if (gc.HasData)
             {
                 string when = running ? "this run" : "the last run (ended " + FriendlyTime(gc.LastGc) + ")";
@@ -180,6 +319,7 @@ namespace Ezpz
             }
             else lblHeapNums.Text = "No memory data yet.";
 
+            if (currentPage == PPerf) ShowRuns();
             UpdateCpu();
             string proc = server.Pid != 0
                 ? "Server process: " + Util.Size(server.MemoryBytes()) + " held in RAM" + (serverCpuPct >= 0 ? ", CPU " + serverCpuPct.ToString("0") + "%" : "")
@@ -451,11 +591,15 @@ namespace Ezpz
         }
     }
 
-    // Single-series line chart: heap in use after each GC, with the max as a dashed reference line.
+    // Memory in use after Java's cleanups over a time range, with the max as a dashed line. Restarts show as
+    // dotted lines, and time the server was down shows as a gap.
     class HeapChart : Control
     {
         static readonly Color Bg = Color.FromArgb(36, 37, 42), Grid = Color.FromArgb(58, 60, 66), Line = Theme.Accent, MaxLine = Theme.Muted;
         List<KeyValuePair<DateTime, long>> pts = new List<KeyValuePair<DateTime, long>>();
+        List<DateTime> restarts = new List<DateTime>();
+        DateTime from, to;
+        double bucketSec = 60;
         long maxMB;
         int hover = -1;
         const int L = 56, R = 16, T = 14, B = 26;
@@ -468,23 +612,43 @@ namespace Ezpz
             Font = new Font("Segoe UI", 8.5f);
         }
 
-        public void SetData(List<KeyValuePair<DateTime, long>> data, long max)
+        // Full (major) cleanups are the honest "what the world needs" number; minor ones still count old garbage.
+        // So the chart uses full cleanups when the range has a few of them.
+        public void SetData(List<MemPoint> data, DateTime start, DateTime end, double bucketSeconds, long max, List<DateTime> runStarts)
         {
-            pts = data.ToList();
-            maxMB = Math.Max(1, max);
+            bool major = data.Count(p => p.M > 0) >= 3;
+            pts = data.Where(p => !major || p.M > 0).Select(p => new KeyValuePair<DateTime, long>(MemoryHistory.FromUnix(p.T), major ? p.M : p.A)).ToList();
+            from = start;
+            to = end > start ? end : start.AddMinutes(1);
+            bucketSec = bucketSeconds;
+            restarts = runStarts.Where(t => t > from && t < to).ToList();
+            maxMB = Math.Max(1, Math.Max(max, pts.Count > 0 ? pts.Max(p => p.Value) : 0));
+            hover = -1;
             Invalidate();
         }
 
         RectangleF Plot { get { return new RectangleF(L, T, Width - L - R, Height - T - B); } }
 
+        float X(DateTime t)
+        {
+            var r = Plot;
+            return r.Left + (float)((t - from).TotalSeconds / Math.Max(1, (to - from).TotalSeconds)) * r.Width;
+        }
+
         PointF Map(int i)
         {
             var r = Plot;
-            DateTime t0 = pts[0].Key, t1 = pts[pts.Count - 1].Key;
-            double span = Math.Max(1, (t1 - t0).TotalSeconds);
-            float x = r.Left + (float)((pts[i].Key - t0).TotalSeconds / span) * r.Width;
             float y = r.Bottom - (float)(pts[i].Value / (double)maxMB) * r.Height;
-            return new PointF(x, Math.Max(r.Top, y));
+            return new PointF(X(pts[i].Key), Math.Max(r.Top, y));
+        }
+
+        string TimeFormat
+        {
+            get
+            {
+                double h = (to - from).TotalHours;
+                return h <= 24 && from.Date == to.Date ? "HH:mm" : h <= 24 * 7 ? "ddd HH:mm" : "d MMM";
+            }
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -510,23 +674,43 @@ namespace Ezpz
                 var ms = g.MeasureString(maxLab, Font);
                 g.DrawString(maxLab, Font, textBrush, r.Left - ms.Width - 6, r.Top - ms.Height / 2);
 
+                // five time labels along the bottom
+                for (int k = 0; k <= 4; k++)
+                {
+                    var t = from.AddSeconds((to - from).TotalSeconds * k / 4);
+                    string lab = k == 4 && (DateTime.Now - to).TotalMinutes < 2 ? "now" : t.ToString(TimeFormat, System.Globalization.CultureInfo.InvariantCulture);
+                    float w = g.MeasureString(lab, Font).Width;
+                    float x = r.Left + r.Width * k / 4f - (k == 0 ? 0 : k == 4 ? w : w / 2);
+                    g.DrawString(lab, Font, textBrush, x, r.Bottom + 5);
+                    if (k > 0 && k < 4) g.DrawLine(gridPen, r.Left + r.Width * k / 4f, r.Bottom, r.Left + r.Width * k / 4f, r.Bottom + 3);
+                }
+
+                using (var restartPen = new Pen(Color.FromArgb(150, Theme.Info), 1) { DashStyle = DashStyle.Dot })
+                    foreach (var t in restarts) g.DrawLine(restartPen, X(t), r.Top, X(t), r.Bottom);
+
                 if (pts.Count == 0)
                 {
-                    const string msg = "No memory data yet";
+                    const string msg = "No memory data for this time";
                     var s = g.MeasureString(msg, Font);
                     g.DrawString(msg, Font, textBrush, r.Left + (r.Width - s.Width) / 2, r.Top + (r.Height - s.Height) / 2);
                     return;
                 }
-                g.DrawString(pts[0].Key.ToString("HH:mm"), Font, textBrush, r.Left, r.Bottom + 5);
-                string end = pts[pts.Count - 1].Key.ToString("HH:mm");
-                g.DrawString(end, Font, textBrush, r.Right - g.MeasureString(end, Font).Width, r.Bottom + 5);
             }
 
+            // one line per stretch of data; a gap of more than a few buckets means the server was down
             var line = Enumerable.Range(0, pts.Count).Select(Map).ToArray();
             using (var pen = new Pen(Line, 2f) { LineJoin = LineJoin.Round, StartCap = LineCap.Round, EndCap = LineCap.Round })
+            using (var dot = new SolidBrush(Line))
             {
-                if (line.Length == 1) { using (var b = new SolidBrush(Line)) g.FillEllipse(b, line[0].X - 4, line[0].Y - 4, 8, 8); }
-                else g.DrawLines(pen, line);
+                int start = 0;
+                for (int i = 1; i <= pts.Count; i++)
+                {
+                    bool brk = i == pts.Count || (pts[i].Key - pts[i - 1].Key).TotalSeconds > Math.Max(bucketSec * 4, 15 * 60) || restarts.Any(t => t > pts[i - 1].Key && t <= pts[i].Key);
+                    if (!brk) continue;
+                    if (i - start == 1) g.FillEllipse(dot, line[start].X - 2.5f, line[start].Y - 2.5f, 5, 5);
+                    else g.DrawLines(pen, line.Skip(start).Take(i - start).ToArray());
+                    start = i;
+                }
             }
 
             if (hover >= 0 && hover < pts.Count)
@@ -535,8 +719,9 @@ namespace Ezpz
                 using (var cross = new Pen(Color.FromArgb(120, Theme.Text), 1))
                     g.DrawLine(cross, p.X, r.Top, p.X, r.Bottom);
                 using (var ring = new SolidBrush(Bg)) g.FillEllipse(ring, p.X - 6, p.Y - 6, 12, 12);
-                using (var dot = new SolidBrush(Line)) g.FillEllipse(dot, p.X - 4, p.Y - 4, 8, 8);
-                string tip = pts[hover].Key.ToString("HH:mm:ss") + "   " + (pts[hover].Value / 1024.0).ToString("0.00") + " GB in use";
+                using (var dotb = new SolidBrush(Line)) g.FillEllipse(dotb, p.X - 4, p.Y - 4, 8, 8);
+                string when = pts[hover].Key.ToString((to - from).TotalHours <= 24 ? "HH:mm" : "ddd d MMM HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+                string tip = when + "   " + (pts[hover].Value / 1024.0).ToString("0.00") + " GB in use";
                 var ts = g.MeasureString(tip, Font);
                 float tx = Math.Min(p.X + 10, r.Right - ts.Width - 8), ty = Math.Max(r.Top, p.Y - ts.Height - 14);
                 using (var bg = new SolidBrush(Color.FromArgb(240, 20, 21, 24))) g.FillRectangle(bg, tx - 6, ty - 3, ts.Width + 12, ts.Height + 6);
@@ -548,13 +733,12 @@ namespace Ezpz
         {
             base.OnMouseMove(e);
             if (pts.Count == 0) return;
-            int best = -1;
-            float bestDx = float.MaxValue;
-            for (int i = 0; i < pts.Count; i++)
-            {
-                float dx = Math.Abs(Map(i).X - e.X);
-                if (dx < bestDx) { bestDx = dx; best = i; }
-            }
+            // the nearest point by time (points are in time order)
+            var r = Plot;
+            var t = from.AddSeconds((e.X - r.Left) / Math.Max(1, r.Width) * (to - from).TotalSeconds);
+            int lo = 0, hi = pts.Count - 1;
+            while (lo < hi) { int mid = (lo + hi) / 2; if (pts[mid].Key < t) lo = mid + 1; else hi = mid; }
+            int best = lo > 0 && (t - pts[lo - 1].Key) < (pts[lo].Key - t) ? lo - 1 : lo;
             if (best != hover) { hover = best; Invalidate(); }
         }
 

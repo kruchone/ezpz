@@ -684,14 +684,19 @@ namespace Ezpz
             }
             log("[backup] Restored " + info.Contents + " (" + n + " files) from " + System.IO.Path.GetFileName(zip));
         }
-        public static void PruneAuto(AppSettings s, Action<string> log)
+        public static void PruneAuto(AppSettings s, Action<string> log) { Prune(s, "auto", s.KeepAutoBackups, log); }
+
+        // Scheduled wipes make a full world backup every time; keep the newest few so weekly wipes don't fill the disk.
+        public static void PruneWipe(AppSettings s, Action<string> log) { Prune(s, "pre-wipe", s.KeepWipeBackups, log); }
+
+        static void Prune(AppSettings s, string kind, int keep, Action<string> log)
         {
-            if (!Directory.Exists(s.BackupDir) || s.KeepAutoBackups <= 0) return;
-            var autos = new DirectoryInfo(s.BackupDir).GetFiles(s.ServerName + "_*_auto.zip")
-                .OrderByDescending(f => f.CreationTimeUtc).Skip(s.KeepAutoBackups).ToList();
-            foreach (var f in autos)
+            if (!Directory.Exists(s.BackupDir) || keep <= 0) return;
+            var old = new DirectoryInfo(s.BackupDir).GetFiles(s.ServerName + "_*_" + kind + ".zip")
+                .OrderByDescending(f => f.CreationTimeUtc).Skip(keep).ToList();
+            foreach (var f in old)
             {
-                try { f.Delete(); log("[backup] Pruned old auto-backup " + f.Name); } catch { }
+                try { f.Delete(); log("[backup] Pruned old " + kind + " backup " + f.Name); } catch { }
             }
         }
     }

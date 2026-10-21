@@ -157,10 +157,11 @@ namespace Ezpz
             return m.Success && DateTime.TryParseExact(m.Groups[1].Value, "dd-MM-yy HH:mm:ss", CultureInfo.InvariantCulture, DateTimeStyles.None, out t) ? t : DateTime.MinValue;
         }
 
-        static IEnumerable<string> LogFiles(AppSettings s, string suffix)
+        // Only files written since the season began: older runs' logs can't hold anything for it.
+        static IEnumerable<string> LogFiles(AppSettings s, string suffix, DateTime since)
         {
             if (!Directory.Exists(s.LogsDir)) return new string[0];
-            return Directory.GetFiles(s.LogsDir, "*" + suffix, SearchOption.AllDirectories).OrderBy(File.GetLastWriteTime);
+            return Directory.GetFiles(s.LogsDir, "*" + suffix, SearchOption.AllDirectories).Where(f => File.GetLastWriteTime(f) >= since).OrderBy(File.GetLastWriteTime);
         }
 
         static IEnumerable<string> Lines(string file)
@@ -181,7 +182,7 @@ namespace Ezpz
             Func<string, Raw> R = n => { Raw r; if (!raw.TryGetValue(n, out r)) { r = new Raw(); raw[n] = r; } return r; };
 
             // lives, deaths and level-ups from the PerkLog
-            foreach (var f in LogFiles(s, "_PerkLog.txt"))
+            foreach (var f in LogFiles(s, "_PerkLog.txt", from))
                 foreach (var line in Lines(f))
                 {
                     var t = When(line);
@@ -197,7 +198,7 @@ namespace Ezpz
                 }
 
             // playtime from the connection log: fully-connected .. disconnect (or the end of that run's log)
-            foreach (var f in LogFiles(s, "_connections.txt"))
+            foreach (var f in LogFiles(s, "_connections.txt", from))
             {
                 var open = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
                 var guidName = new Dictionary<string, string>();
@@ -226,7 +227,7 @@ namespace Ezpz
 
             // god mode / invisible / no-clip used on someone this season (console and admin logs)
             foreach (var suffix in new[] { "_admin.txt", "_DebugLog-server.txt" })
-                foreach (var f in LogFiles(s, suffix))
+                foreach (var f in LogFiles(s, suffix, from))
                     foreach (var line in Lines(f))
                     {
                         if (!Cheat.IsMatch(line) || line.IndexOf("-false", StringComparison.OrdinalIgnoreCase) >= 0) continue;
@@ -325,6 +326,28 @@ namespace Ezpz
                 d[(string)killer] = n + 1;
             }
             return d;
+        }
+
+        // EZPZ Server Tools appends a line per death to Lua\ezpz_events.json forever. Once it passes 512 KB, keep only
+        // what the ladder can still use: this season and the last 90 days. Only while the server is stopped, so the
+        // game isn't writing to it at the same moment.
+        public static void TrimEvents(AppSettings s, DateTime keepFrom)
+        {
+            string path = Path.Combine(s.DataDir, "Lua", "ezpz_events.json");
+            try
+            {
+                if (!File.Exists(path) || new FileInfo(path).Length < 512 * 1024) return;
+                var cutoff = MemoryHistory.ToUnix(keepFrom.ToUniversalTime()) * 1000.0;
+                var keep = File.ReadAllLines(path).Where(l =>
+                {
+                    var m = Regex.Match(l, "\"at\":\\s*(\\d+)");
+                    return m.Success && double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture) >= cutoff;
+                }).ToArray();
+                File.WriteAllLines(path + ".tmp", keep);
+                File.Replace(path + ".tmp", path, null);
+                AppLog.Write("[seasons] Trimmed ezpz_events.json to " + keep.Length + " events since " + keepFrom.ToString("d MMM yyyy", CultureInfo.InvariantCulture) + ".");
+            }
+            catch (Exception ex) { AppLog.Error("trimming ezpz_events.json", ex); }
         }
 
         static void AddPlayed(Raw r, DateTime a, DateTime b, DateTime from, DateTime until)

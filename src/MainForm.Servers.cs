@@ -14,7 +14,7 @@ namespace Ezpz
     public partial class MainForm
     {
         CheckBox chkAutoRestart, chkUpdateOnRestart, chkBackupOnStart;
-        NumericUpDown numRestartHours, numKeepBackups;
+        NumericUpDown numRestartHours, numKeepBackups, numKeepWipeBackups;
         Action stateHandler, crashHandler;
 
         void WireServer(ServerController c, bool on)
@@ -63,6 +63,8 @@ namespace Ezpz
                 if (server.State != ServerState.Stopped) return;
             }
 
+            SaveMemHistory();   // and the seasons, so nothing from the old server is lost
+            if (seasonsDirty) SaveSeasons();
             WireServer(server, false);
             S = AppSettings.Load(id);
             AppSettings.ActiveProfileId = id;
@@ -87,6 +89,8 @@ namespace Ezpz
             modsLoaded = false; modsDirty = false;
             lastRun = new ModConfig.RunStatus();
             gcReader = new GcLogReader();
+            memHistory = MemoryHistory.Load(S.ProfileId); memSavedAt = DateTime.Now;
+            BackfillMemHistory();
             lock (liveStats) liveStats.Clear();
             lastStatsPoll = DateTime.MinValue;
             ebsKhz = null; ebsLookedUp = false;

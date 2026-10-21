@@ -91,7 +91,11 @@ namespace Ezpz
             detectTimer.Interval = 1000;
             detectTimer.Tick += (s, e) => OnSecond();
             detectTimer.Start();
-            FormClosed += (s, e) => { detectTimer.Stop(); uiTimer.Stop(); };   // no ticks while the window is torn down
+            FormClosed += (s, e) =>
+            {
+                detectTimer.Stop(); uiTimer.Stop();   // no ticks while the window is torn down
+                try { SaveMemHistory(); if (seasonsDirty) SaveSeasons(); } catch (Exception ex) { AppLog.Error("saving on exit", ex); }
+            };
 
             Shown += (s, e) =>
             {
@@ -1116,6 +1120,7 @@ namespace Ezpz
             ModWatchTick();
             DiscordTick();
             BackupTick();
+            if (ticks % 60 == 30 && currentPage != PHome && currentPage != PPerf) ReadGc();   // keeps the memory history going on other pages
             if (currentPage == PLogs && ticks % 10 == 0) LoadLogs(false);
             if ((currentPage == PHome || currentPage == PPerf) && ticks % 3 == 0) RefreshHome();
 

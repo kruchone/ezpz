@@ -24,10 +24,6 @@ namespace Ezpz
         internal double lastStallMs;
         internal bool lastStallStartup;
         public bool OutOfMemory;
-        public readonly List<KeyValuePair<DateTime, long>> Points = new List<KeyValuePair<DateTime, long>>();
-        public readonly List<KeyValuePair<DateTime, long>> MajorPoints = new List<KeyValuePair<DateTime, long>>();
-        // Minor (young-only) cleanups still count old garbage, so the chart prefers full cleanups once there are a few.
-        public List<KeyValuePair<DateTime, long>> ChartPoints { get { return MajorPoints.Count >= 3 ? MajorPoints : Points; } }
 
         public bool HasData { get { return Collections > 0; } }
         // Live data after full (major) collections is the honest "how much does the world need" number.
@@ -35,14 +31,16 @@ namespace Ezpz
     }
 
     // Incrementally reads the GC log written by -Xlog:gc,gc+init (format checked against the Zulu 25 JRE PZ ships).
+    // Each cleanup also goes to History (the chart's data, kept by ezpz across restarts). The log itself rotates
+    // at 20 MB on long runs; that only starts the file again, the run's numbers carry on.
     public class GcLogReader
     {
+        public MemoryHistory History;
         static readonly Regex Collection = new Regex(@"GC\(\d+\) (\w+) Collection \(([^)]*)\) (\d+)M\(\d+%\)->(\d+)M\(\d+%\) ([\d.]+)s");
         static readonly Regex Stall = new Regex(@"Allocation Stall \(([^)]*)\) ([\d.]+)ms");
         static readonly Regex MaxCap = new Regex(@"Max Capacity: (\d+)M");
         static readonly Regex Uptime = new Regex(@"\]\[([\d.]+)s\]");
         const double StartupSeconds = 180;
-        const int MaxPoints = 1500;
 
         string path;
         long pos;
@@ -57,7 +55,7 @@ namespace Ezpz
             {
                 using (var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
                 {
-                    if (fs.Length < pos) Reset();   // rotated: a new server run
+                    if (fs.Length < pos) { pos = 0; partial = ""; }   // rotated (a long run) or a new run, which says so in its first lines
                     if (fs.Length == pos) return Stats;
                     fs.Seek(pos, SeekOrigin.Begin);
                     string text = partial + new StreamReader(fs, Encoding.UTF8).ReadToEnd();
@@ -89,16 +87,14 @@ namespace Ezpz
                 Stats.LastAfterMB = after;
                 Stats.LastGc = t;
                 if (after > Stats.PeakAfterMB) Stats.PeakAfterMB = after;
-                if (m.Groups[1].Value == "Major")
+                bool major = m.Groups[1].Value == "Major";
+                if (major)
                 {
                     Stats.MajorCollections++;
                     if (after > Stats.PeakMajorAfterMB) Stats.PeakMajorAfterMB = after;
-                    Stats.MajorPoints.Add(new KeyValuePair<DateTime, long>(t, after));
                 }
                 if (dur > Stats.LongestGcSec) Stats.LongestGcSec = dur;
-                Stats.Points.Add(new KeyValuePair<DateTime, long>(t, after));
-                if (Stats.Points.Count > MaxPoints)   // keep it light: drop every other old point
-                    for (int i = 0; i < Stats.Points.Count / 2; i++) Stats.Points.RemoveAt(i);
+                if (History != null) History.Add(t, after, major);
                 return;
             }
             m = Stall.Match(l);

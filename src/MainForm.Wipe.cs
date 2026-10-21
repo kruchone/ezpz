@@ -277,7 +277,7 @@ namespace Ezpz
                     await StopFlow();
                     if (server.State != ServerState.Stopped) { WipeFailed(slot, "the server didn't stop", false); return; }
                 }
-                if (!await BackupFlow("pre-reset", true)) { WipeFailed(slot, "the backup failed", wasRunning); return; }
+                if (!await BackupFlow("pre-wipe", true)) { WipeFailed(slot, "the backup failed", wasRunning); return; }
                 await FinalizeSeason(due, "scheduled wipe");
                 if (!BeginBusy("Wiping…")) { WipeFailed(slot, "ezpz was busy", wasRunning); return; }
                 try

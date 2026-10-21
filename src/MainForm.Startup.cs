@@ -39,7 +39,9 @@ namespace Ezpz
                     string khz = GameData.FindEbs(S, out when);
                     if (khz != null) { ebsKhz = khz; ebsWhen = when; }
                     ebsLookedUp = true;
-                    gcReader.Read(S.GcLogPath);
+                    memHistory = MemoryHistory.Load(S.ProfileId);
+                    BackfillMemHistory();
+                    ReadGc();
                 }),
                 Step("Listing backups", () => RefreshBackupList()),
                 Step("Reading the server's logs", () => { logAll = logData.Load(S, perkNames); logLoadedAt = DateTime.Now; FilterLogs(); }),

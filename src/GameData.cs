@@ -8,6 +8,60 @@ using System.Text.RegularExpressions;
 
 namespace Ezpz
 {
+    // Folds a server's log files, oldest first, into one result. The game moves each finished run's logs into
+    // Logs\logs_<date>\ and never touches them again, so their part of the result is kept and only the current
+    // run's files (directly in Logs\) are read each time. Without this, every refresh re-read every log the
+    // server ever wrote, which grows forever on a long-lived server.
+    public class LogFold<T>
+    {
+        class State { public T Closed; public readonly List<string> Files = new List<string>(); public DateTime UpTo = DateTime.MinValue; }
+
+        readonly string pattern;
+        readonly Func<T> make;
+        readonly Func<T, T> copy;
+        readonly Action<T, string> apply;
+        readonly Dictionary<string, State> states = new Dictionary<string, State>(StringComparer.OrdinalIgnoreCase);
+
+        public LogFold(string pattern, Func<T> make, Func<T, T> copy, Action<T, string> apply)
+        {
+            this.pattern = pattern; this.make = make; this.copy = copy; this.apply = apply;
+        }
+
+        public T Read(string logsDir)
+        {
+            if (!Directory.Exists(logsDir)) return make();
+            string top = Path.GetFullPath(logsDir).TrimEnd('\\');
+            var files = Directory.GetFiles(logsDir, pattern, SearchOption.AllDirectories)
+                .Select(f => new { Path = f, Time = File.GetLastWriteTime(f), Done = !Path.GetDirectoryName(Path.GetFullPath(f)).Equals(top, StringComparison.OrdinalIgnoreCase) })
+                .OrderBy(x => x.Time).ToList();
+            lock (states)
+            {
+                State st;
+                if (!states.TryGetValue(top, out st)) { st = new State { Closed = make() }; states[top] = st; }
+                var done = files.Where(x => x.Done).ToList();
+                var known = new HashSet<string>(st.Files, StringComparer.OrdinalIgnoreCase);
+                var fresh = done.Where(x => !known.Contains(x.Path)).ToList();
+                // a finished run's file vanished (logs cleaned up) or an older one appeared: start over
+                var present = new HashSet<string>(done.Select(x => x.Path), StringComparer.OrdinalIgnoreCase);
+                if (st.Files.Any(f => !present.Contains(f)) || fresh.Any(x => x.Time < st.UpTo))
+                {
+                    st = new State { Closed = make() };
+                    states[top] = st;
+                    fresh = done;
+                }
+                foreach (var x in fresh)
+                {
+                    apply(st.Closed, x.Path);
+                    st.Files.Add(x.Path);
+                    if (x.Time > st.UpTo) st.UpTo = x.Time;
+                }
+                var result = copy(st.Closed);
+                foreach (var x in files.Where(x => !x.Done)) apply(result, x.Path);
+                return result;
+            }
+        }
+    }
+
     public class PlayerInfo
     {
         public string Name;
@@ -17,6 +71,7 @@ namespace Ezpz
         public DateTime FirstSeen = DateTime.MinValue;
         public DateTime LastSeen = DateTime.MinValue;
         public bool HasAccount;   // listed in the server's account database
+        public PlayerInfo Copy() { return (PlayerInfo)MemberwiseClone(); }
     }
 
     public class LevelUp { public DateTime When; public string Perk; public int Level; }
@@ -33,6 +88,14 @@ namespace Ezpz
         public DateTime LastSeen = DateTime.MinValue, CharacterSince = DateTime.MinValue;
         public readonly Dictionary<string, int> Skills = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         public readonly List<LevelUp> LevelUps = new List<LevelUp>();   // this character's, oldest first
+
+        public CharacterSheet Copy()
+        {
+            var c = new CharacterSheet { Name = Name, SteamId = SteamId, Position = Position, HoursSurvived = HoursSurvived, Characters = Characters, LastSeen = LastSeen, CharacterSince = CharacterSince };
+            foreach (var kv in Skills) c.Skills[kv.Key] = kv.Value;
+            c.LevelUps.AddRange(LevelUps);
+            return c;
+        }
     }
 
     public static class Characters
@@ -76,15 +139,18 @@ namespace Ezpz
             return Regex.Replace(key, @"(?<=[a-z])(?=[A-Z])", " ");
         }
 
-        public static Dictionary<string, CharacterSheet> Read(AppSettings s)
+        static readonly LogFold<Dictionary<string, CharacterSheet>> PerkLogs = new LogFold<Dictionary<string, CharacterSheet>>("*_PerkLog.txt",
+            () => new Dictionary<string, CharacterSheet>(StringComparer.OrdinalIgnoreCase),
+            d => d.ToDictionary(kv => kv.Key, kv => kv.Value.Copy(), StringComparer.OrdinalIgnoreCase),
+            ApplyPerkLog);
+
+        public static Dictionary<string, CharacterSheet> Read(AppSettings s) { return PerkLogs.Read(s.LogsDir); }
+
+        static void ApplyPerkLog(Dictionary<string, CharacterSheet> d, string f)
         {
-            var d = new Dictionary<string, CharacterSheet>(StringComparer.OrdinalIgnoreCase);
-            if (!Directory.Exists(s.LogsDir)) return d;
-            var files = Directory.GetFiles(s.LogsDir, "*_PerkLog.txt", SearchOption.AllDirectories).OrderBy(f => File.GetLastWriteTime(f));
-            foreach (var f in files)
             {
                 string text;
-                try { text = GameData.ReadShared(f); } catch { continue; }
+                try { text = GameData.ReadShared(f); } catch { return; }
                 foreach (var line in text.Split('\n'))
                 {
                     var b = Bracket.Matches(line).Cast<Match>().Select(m => m.Groups[1].Value).ToList();
@@ -132,7 +198,6 @@ namespace Ezpz
                     }
                 }
             }
-            return d;
         }
     }
 
@@ -236,16 +301,16 @@ namespace Ezpz
                 return r.ReadToEnd();
         }
 
-        public static Dictionary<string, PlayerInfo> ReadRoster(AppSettings s)
+        static readonly LogFold<Dictionary<string, PlayerInfo>> ConnectionLogs = new LogFold<Dictionary<string, PlayerInfo>>("*_connections.txt",
+            () => new Dictionary<string, PlayerInfo>(StringComparer.OrdinalIgnoreCase),
+            d => d.ToDictionary(kv => kv.Key, kv => kv.Value.Copy(), StringComparer.OrdinalIgnoreCase),
+            ApplyConnections);
+
+        static void ApplyConnections(Dictionary<string, PlayerInfo> d, string f)
         {
-            var d = new Dictionary<string, PlayerInfo>(StringComparer.OrdinalIgnoreCase);
-            if (!Directory.Exists(s.LogsDir)) return d;
-            var files = Directory.GetFiles(s.LogsDir, "*_connections.txt", SearchOption.AllDirectories)
-                .OrderBy(f => File.GetLastWriteTime(f));
-            foreach (var f in files)
             {
                 string text;
-                try { text = ReadShared(f); } catch { continue; }
+                try { text = ReadShared(f); } catch { return; }
                 foreach (var line in text.Split('\n'))
                 {
                     var tm = Stamp.Match(line);
@@ -269,6 +334,11 @@ namespace Ezpz
                     if (!string.IsNullOrEmpty(ip)) p.Ip = ip;
                 }
             }
+        }
+
+        public static Dictionary<string, PlayerInfo> ReadRoster(AppSettings s)
+        {
+            var d = ConnectionLogs.Read(s.LogsDir);
             // accounts from the server's database: adds people who have an account but never joined (e.g. just
             // whitelisted), and gives everyone their current role even if it changed while they were offline
             foreach (var a in ServerDb.ReadAccounts(s))
@@ -288,7 +358,7 @@ namespace Ezpz
             when = DateTime.MinValue;
             if (!Directory.Exists(s.LogsDir)) return null;
             var files = Directory.GetFiles(s.LogsDir, "*DebugLog-server*.txt", SearchOption.AllDirectories)
-                .OrderByDescending(f => File.GetLastWriteTime(f));
+                .OrderByDescending(f => File.GetLastWriteTime(f)).Take(30);   // the newest runs: debug logs are big, and they pile up
             foreach (var f in files)
             {
                 try

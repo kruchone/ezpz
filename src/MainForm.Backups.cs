@@ -34,14 +34,15 @@ namespace Ezpz
             rbBkBoth = BackupModeRadio(p, "Both, for redundancy", "Two independent copies. Uses twice the disk space and a little longer to start.");
 
             p.H2("ezpz backups");
-            grpEzpz = new Panel { Size = new Size(Page.Wide, 120), BackColor = Theme.Bg };
-            p.Add(grpEzpz, 120);
+            grpEzpz = new Panel { Size = new Size(Page.Wide, 152), BackColor = Theme.Bg };
+            p.Add(grpEzpz, 152);
             int gy = 0;
             chkBackupOnStart = Theme.Check("Back up when the server starts", S.BackupOnStart);
             chkBackupOnStart.Location = new Point(0, gy); grpEzpz.Controls.Add(chkBackupOnStart); gy += 30;
             numBackupEveryHours = GroupNum(grpEzpz, ref gy, "Also every N hours while it runs (0 = off)", 0, 48, S.BackupEveryHours);
             numKeepBackups = GroupNum(grpEzpz, ref gy, "Keep this many automatic backups", 1, 500, S.KeepAutoBackups);
-            grpEzpz.Controls.Add(new Label { Text = "Manual, pre-reset and pre-restore backups are never deleted automatically.", ForeColor = Theme.Muted, AutoSize = true, Location = new Point(0, gy + 2) });
+            numKeepWipeBackups = GroupNum(grpEzpz, ref gy, "Keep this many backups from scheduled wipes", 1, 100, S.KeepWipeBackups);
+            grpEzpz.Controls.Add(new Label { Text = "Manual, manual-reset and pre-restore backups are never deleted automatically.", ForeColor = Theme.Muted, AutoSize = true, Location = new Point(0, gy + 2) });
 
             p.H2("Project Zomboid's backups");
             grpPz = new Panel { Size = new Size(Page.Wide, 150), BackColor = Theme.Bg };
@@ -56,7 +57,7 @@ namespace Ezpz
             lblPzNote = new Label { ForeColor = Theme.Muted, AutoSize = true, MaximumSize = new Size(Page.Wide, 0), Location = new Point(0, gy + 2) };
             grpPz.Controls.Add(lblPzNote);
 
-            foreach (Control c in new Control[] { chkBackupOnStart, numBackupEveryHours, numKeepBackups, chkPzOnStart, numPzPeriod, chkPzOnVersion, numPzCount })
+            foreach (Control c in new Control[] { chkBackupOnStart, numBackupEveryHours, numKeepBackups, numKeepWipeBackups, chkPzOnStart, numPzPeriod, chkPzOnVersion, numPzCount })
             {
                 if (c is CheckBox) ((CheckBox)c).CheckedChanged += (s, e) => SaveBackupSettings();
                 else ((NumericUpDown)c).ValueChanged += (s, e) => SaveBackupSettings();
@@ -135,6 +136,7 @@ namespace Ezpz
                 chkBackupOnStart.Checked = S.BackupOnStart;
                 numBackupEveryHours.Value = Math.Max(0, Math.Min(48, S.BackupEveryHours));
                 numKeepBackups.Value = Math.Max(1, Math.Min(500, S.KeepAutoBackups));
+                numKeepWipeBackups.Value = Math.Max(1, Math.Min(100, S.KeepWipeBackups));
 
                 int mode = S.BackupMode;
                 if (mode < 0)   // not chosen yet: describe what's actually on
@@ -191,6 +193,7 @@ namespace Ezpz
             S.BackupOnStart = chkBackupOnStart.Checked;
             S.BackupEveryHours = (int)numBackupEveryHours.Value;
             S.KeepAutoBackups = (int)numKeepBackups.Value;
+            S.KeepWipeBackups = (int)numKeepWipeBackups.Value;
             S.Save();
             if (File.Exists(S.IniPath))
             {
@@ -251,6 +254,7 @@ namespace Ezpz
                 }
                 await Task.Run(() => Backups.Create(S, reason, Log));
                 if (reason == "auto") Backups.PruneAuto(S, Log);
+                if (reason == "pre-wipe") Backups.PruneWipe(S, Log);
                 lastBackupAt = DateTime.Now;
                 return true;
             }

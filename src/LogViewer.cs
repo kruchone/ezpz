@@ -42,6 +42,10 @@ namespace Ezpz
         // ezpz's own background checks; not moderation history
         static readonly Regex Polling = new Regex(@"^(players|stats \w+ all|stats \w+ list)$");
 
+        // The Logs page shows the last KeepDays days: the game keeps every run's logs forever, and holding them
+        // all in memory would grow without end on a long-lived server. (Older logs stay on disk.)
+        public const int KeepDays = 30;
+
         public List<LogEntry> Load(AppSettings s, Dictionary<string, string> perkNames)
         {
             var all = new List<LogEntry>();
@@ -55,6 +59,7 @@ namespace Ezpz
                 seen.Add(f);
                 FileInfo fi;
                 try { fi = new FileInfo(f); } catch { continue; }
+                if (fi.LastWriteTime < DateTime.Now.AddDays(-KeepDays)) continue;
                 FileCache c;
                 if (!cache.TryGetValue(f, out c) || c.Mtime != fi.LastWriteTimeUtc || c.Size != fi.Length)
                 {

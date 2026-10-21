@@ -435,7 +435,7 @@ namespace Ezpz
             if (S.DiscordWebhook == "" || server.State != ServerState.Running) return;
             if (DiscordWants(DiscordEvent.Health) && ticks % 60 == 0)
             {
-                var gc = gcReader.Read(S.GcLogPath);
+                var gc = ReadGc();
                 if ((gc.Stalls >= 3 || gc.OutOfMemory) && healthNotifiedRun != gc.RunStart)
                 {
                     healthNotifiedRun = gc.RunStart;

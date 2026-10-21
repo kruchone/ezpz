@@ -87,7 +87,19 @@ namespace Ezpz
 
         void SeasonTick()
         {
-            if (server.State != ServerState.Running) { onlineSince.Clear(); WriteSeasonFile(); return; }
+            if (server.State != ServerState.Running)
+            {
+                onlineSince.Clear();
+                WriteSeasonFile();
+                if (server.State == ServerState.Stopped && ticks % 3600 < 10)
+                {
+                    var keepFrom = DateTime.Now.AddDays(-90);
+                    if (seasons.Current != null && seasons.Current.StartTime < keepFrom) keepFrom = seasons.Current.StartTime;
+                    var settings = S;
+                    Task.Run(() => Ladder.TrimEvents(settings, keepFrom));
+                }
+                return;
+            }
             foreach (var n in onlineNow) if (!onlineSince.ContainsKey(n)) onlineSince[n] = DateTime.Now;
             foreach (var n in onlineSince.Keys.Where(k => !onlineNow.Contains(k)).ToList()) onlineSince.Remove(n);
 

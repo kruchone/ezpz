@@ -28,6 +28,7 @@ namespace Ezpz
         public bool UpdateOnRestart = false;
         public bool BackupOnStart = true;
         public int KeepAutoBackups = 10;
+        public int KeepWipeBackups = 6;                // backups made before scheduled wipes
         public int BackupMode = -1;          // 0 = ezpz, 1 = PZ's built-in, 2 = both; -1 = not chosen yet
         public int BackupEveryHours = 0;     // ezpz backups while the server runs (0 = only on start)
         public int ModUpdateAction = 1;    // 0 = just tell me, 1 = restart after a 5-minute warning, 2 = restart when nobody is online
