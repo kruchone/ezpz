@@ -53,7 +53,7 @@ namespace Ezpz
         public int Number = 1;
         public string Start = "", End = "", EndReason = "";
         public bool ModSeen;                         // EZPZ Server Tools reported during this season
-        public bool FreshStart;                      // began with a wipe, so every kill counter starts at zero
+        public bool FreshStart;                      // began with a wipe that deleted characters: everyone's hours and kills start at zero
         public Dictionary<string, SeasonPlayer> Players = new Dictionary<string, SeasonPlayer>(StringComparer.OrdinalIgnoreCase);
         public List<AuditEntry> Audit = new List<AuditEntry>();
         public List<string> EndNearSteps = new List<string>();   // announcements already made
@@ -171,7 +171,9 @@ namespace Ezpz
             foreach (var l in text.Split('\n')) yield return l.TrimEnd('\r');
         }
 
-        class Raw { public double MaxHours, Levels, Deaths, Played; public bool Cheated, Seen; }
+        // MaxHours is the longest life this season, in hours lived during the season: a character kept from before
+        // (a "keep characters" wipe, or a season started without a wipe) only counts the hours since it began.
+        class Raw { public double MaxHours, Levels, Deaths, Played, LifeBase = -1, LastHours = -1; public bool Cheated, Seen; }
 
         // Scores everyone who played in [season start, until]. alive: who is alive right now (for Final Stand);
         // roles: account roles (to leave staff out).
@@ -192,7 +194,14 @@ namespace Ezpz
                     var r = R(b[2]);
                     r.Seen = true;
                     var hm = HoursRx.Match(b[b.Count - 1]);
-                    if (hm.Success) r.MaxHours = Math.Max(r.MaxHours, double.Parse(hm.Groups[1].Value, CultureInfo.InvariantCulture));
+                    if (hm.Success)
+                    {
+                        double h = double.Parse(hm.Groups[1].Value, CultureInfo.InvariantCulture);
+                        if (r.LastHours >= 0 && h + 1 < r.LastHours) r.LifeBase = 0;   // hours went down: a new character, born this season
+                        if (r.LifeBase < 0) r.LifeBase = season.FreshStart ? 0 : h;   // first time seen this season
+                        r.MaxHours = Math.Max(r.MaxHours, h - r.LifeBase);
+                        r.LastHours = h;
+                    }
                     if (b[4] == "Died") r.Deaths++;
                     else if (b[4] == "Level Changed") r.Levels++;
                 }

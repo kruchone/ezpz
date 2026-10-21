@@ -200,15 +200,29 @@ namespace Ezpz
                 "Day " + day + (end != null ? ", ends " + WipeSchedule.Until(end.Value, DateTime.Now) : "") + "." + (TopText(10) == "" ? "\n\nNobody qualifies yet." : TopText(10)), DcBlue);
         }
 
-        // Rewards go out once the winner has been online in the new season for a minute.
+        // Rewards go out once the winner is playing a character in the new season. With EZPZ Server Tools that's
+        // when the mod reports their (living) character; without it, after 5 minutes online, which gets them past
+        // character creation. An item this server doesn't know waits (an additem for it would just fail silently).
+        readonly HashSet<string> rewardWarned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        bool RewardItemKnown(string id) { return catalog.Items.Count == 0 || catalog.FindItem(id) != null; }
+
         void DeliverRewards()
         {
             if (server.State != ServerState.Running) return;
             int current = seasons.Current != null ? seasons.Current.Number : int.MaxValue;
+            bool modReporting = live != null && live.Fresh;
             foreach (var r in seasons.Rewards.Where(x => x.Delivered == "" && x.Season < current))
             {
                 DateTime since;
-                if (!onlineSince.TryGetValue(r.Player, out since) || (DateTime.Now - since).TotalSeconds < 60) continue;
+                if (!onlineSince.TryGetValue(r.Player, out since)) continue;
+                if (modReporting ? live.Find(r.Player) == null : (DateTime.Now - since).TotalMinutes < 5) continue;
+                if (!RewardItemKnown(r.Item))
+                {
+                    if (rewardWarned.Add(r.Season + "|" + r.Player + "|" + r.Item))
+                        Log("[seasons] Not giving " + r.Player + " their reward: " + r.Item + " isn't an item on this server. Change it on the Seasons page (right-click the reward).");
+                    continue;
+                }
                 Cmd("additem \"" + Q(r.Player) + "\" \"" + Q(r.Item) + "\" 1");
                 Cmd("servermsg \"" + Q(r.Player) + " receives " + Q(ItemName(r.Item)) + ": " + Q(r.Title) + " of Season " + r.Season + ".\"");
                 r.Delivered = DateTime.Now.ToString("o");
@@ -254,13 +268,15 @@ namespace Ezpz
 
         // ---------- the season's end (called before a wipe deletes anything)
 
-        async Task FinalizeSeason(DateTime end, string reason)
+        // charactersKept: the wipe keeps characters ("Fresh map, keep characters"), so the next season counts
+        // hours and kills from where each character is, not from zero.
+        async Task FinalizeSeason(DateTime end, string reason, bool charactersKept)
         {
             if (!S.SeasonsEnabled) return;
             var season = seasons.Current;
             if (season == null)
             {
-                seasons.Current = new SeasonRecord { Number = 1, Start = end.ToString("o"), FreshStart = true };
+                seasons.Current = new SeasonRecord { Number = 1, Start = end.ToString("o"), FreshStart = !charactersKept };
                 SaveSeasons();
                 Log("[seasons] Season 1 begins with this wipe.");
                 Notify(DiscordEvent.Seasons, "🏁 Season 1 begins on " + ServerTitle(), "The ladder starts with the fresh world. Survive long, learn a lot, kill plenty, see the map.", DcGreen);
@@ -297,7 +313,7 @@ namespace Ezpz
                 foreach (var g in season.Titles.Where(x => x.Key != Ladder.ChampionTitle).GroupBy(x => x.Value, StringComparer.OrdinalIgnoreCase))
                     seasons.Rewards.Add(new SeasonReward { Season = season.Number, Player = g.Key, Item = items[3], Title = string.Join(", ", g.Select(x => x.Key)) });
 
-            seasons.Current = new SeasonRecord { Number = season.Number + 1, Start = end.ToString("o"), FreshStart = true };
+            seasons.Current = new SeasonRecord { Number = season.Number + 1, Start = end.ToString("o"), FreshStart = !charactersKept };
             standings = null;
             SaveSeasons();
 
@@ -409,7 +425,10 @@ namespace Ezpz
             save.Click += (s, e) => SaveSeasonSettings();
             p.Buttons(save);
             p.Add(new Label { Text = "Rewards so far", AutoSize = true, ForeColor = Theme.Text, Font = Theme.Bold }, 20);
-            lvRewards = SeasonList(new[] { "Season", "Player", "For", "Item", "Given" }, new[] { 60, 140, 180, 220, 160 }, 140);
+            lvRewards = SeasonList(new[] { "Season", "Player", "For", "Item", "Given" }, new[] { 60, 140, 180, 220, 260 }, 140);
+            var rewardMenu = new ContextMenuStrip();
+            rewardMenu.Items.Add("Change the item…", null, (s, e) => ChangeRewardItem());
+            lvRewards.ContextMenuStrip = rewardMenu;
             p.Add(lvRewards, 140);
 
             p.H2("Hall of Fame");
@@ -595,9 +614,13 @@ namespace Ezpz
             lvRewards.BeginUpdate();
             lvRewards.Items.Clear();
             foreach (var r in seasons.Rewards.AsEnumerable().Reverse())
+            {
+                bool known = RewardItemKnown(r.Item);
                 lvRewards.Items.Add(new ListViewItem(new[] { r.Season.ToString(), r.Player, r.Title, ItemName(r.Item) + " (" + r.Item + ")",
-                    r.Delivered != "" ? DateTime.Parse(r.Delivered, null, DateTimeStyles.RoundtripKind).ToString("d MMM HH:mm") : "waiting for them to join" })
-                    { ForeColor = r.Delivered != "" ? Theme.Muted : Theme.Warn });
+                    r.Delivered != "" ? DateTime.Parse(r.Delivered, null, DateTimeStyles.RoundtripKind).ToString("d MMM HH:mm")
+                    : !known ? "not an item on this server: right-click to change it" : "waiting for them to play" })
+                    { ForeColor = r.Delivered != "" ? Theme.Muted : known ? Theme.Warn : Theme.Danger, Tag = r });
+            }
             lvRewards.EndUpdate();
 
             lvHall.BeginUpdate();
@@ -625,6 +648,25 @@ namespace Ezpz
                     x.A.Before == "" && x.A.After == "" ? "" : x.A.Before + " → " + x.A.After, x.A.Reason }) { ToolTipText = x.A.What + "\n" + x.A.Reason });
             }
             lvAudit.EndUpdate();
+        }
+
+        // For a reward that hasn't gone out yet: pick another item (say, one from a mod that was removed).
+        void ChangeRewardItem()
+        {
+            if (lvRewards.SelectedItems.Count != 1) return;
+            var r = (SeasonReward)lvRewards.SelectedItems[0].Tag;
+            if (r.Delivered != "") { Info(r.Player + " already has this reward."); return; }
+            var v = Prompt.Ask(this, "Reward item", "Item ID for " + r.Player + "'s reward (" + r.Title + ", Season " + r.Season + "):", r.Item, false);
+            if (v == null || v.Trim() == "" || v.Trim() == r.Item) return;
+            string id = v.Trim();
+            if (!id.Contains(".")) id = "Base." + id;
+            if (!RewardItemKnown(id) && !Confirm(id + " isn't an item this server knows. Use it anyway?")) return;
+            var season = seasons.Current ?? seasons.Archive.LastOrDefault();
+            string before = r.Item;
+            r.Item = id;
+            if (season != null) Audit(season, "Changed " + r.Player + "'s Season " + r.Season + " reward", before, id, "item changed on the Seasons page", null);
+            else SaveSeasons();
+            ShowSeasonLists();
         }
 
         void UpdateSeasonButtons()

@@ -995,7 +995,7 @@ namespace Ezpz
             if (endSeason == null) return;
             if (!await EnsureStopped("reset")) return;
             if (ckBackupFirst.Checked && !await BackupFlow("pre-reset")) { Warn("Reset cancelled because the backup failed."); return; }
-            if (endSeason == true) await FinalizeSeason(DateTime.Now, "manual reset");
+            if (endSeason == true) await FinalizeSeason(DateTime.Now, "manual reset", plan.KeepCharacters);
             if (!BeginBusy("Resetting…")) return;
             try
             {

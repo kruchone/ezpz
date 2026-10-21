@@ -278,7 +278,7 @@ namespace Ezpz
                     if (server.State != ServerState.Stopped) { WipeFailed(slot, "the server didn't stop", false); return; }
                 }
                 if (!await BackupFlow("pre-wipe", true)) { WipeFailed(slot, "the backup failed", wasRunning); return; }
-                await FinalizeSeason(due, "scheduled wipe");
+                await FinalizeSeason(due, "scheduled wipe", WipeSchedule.Plan(S).KeepCharacters);
                 if (!BeginBusy("Wiping…")) { WipeFailed(slot, "ezpz was busy", wasRunning); return; }
                 try
                 {
