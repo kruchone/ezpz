@@ -43,7 +43,8 @@ namespace Ezpz
             };
             lblSheetSub.LinkClicked += (s, e) => Util.OpenUrl((string)e.Link.LinkData);
             lblSheetLive = new Label { Dock = DockStyle.Top, Height = 58, ForeColor = Theme.Accent, UseMnemonic = false, AutoEllipsis = true };   // three short lines
-            head.Controls.Add(lblSheetLive);   // live condition from EZPZ Server Tools (empty without it)
+            head.Controls.Add(lblSheetLive);   // live condition from EZPZ Server Tools (or a hint that it needs it)
+            MakeToolsHint(lblSheetLive);
             head.Controls.Add(lblSheetSub);
             head.Controls.Add(nameRow);
             lblSheetNet = new Label { Dock = DockStyle.Bottom, Height = 36, ForeColor = Theme.Muted, UseMnemonic = false };

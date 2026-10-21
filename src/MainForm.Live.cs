@@ -75,6 +75,8 @@ namespace Ezpz
 
         void RefreshLive()
         {
+            if (currentPage == PMods) RefreshServerToolsCard();
+            if (currentPage == PSeasons) ShowSeasonToolsLine();
             if (currentPage == PPlayers) UpdateSheetLive();
             if (currentPage == PMap) RefreshMapMarkers();
             if (lvLive == null) return;
@@ -119,7 +121,20 @@ namespace Ezpz
         {
             if (lblSheetLive == null) return;
             var lp = Sel != null && live != null && live.Fresh && server.State == ServerState.Running ? live.Find(Sel) : null;
-            if (lp == null) { lblSheetLive.Text = ""; return; }
+            if (lp == null)
+            {
+                lblSheetLive.Text = "";
+                // online, but nothing live to show: say why
+                if (Sel != null && server.State == ServerState.Running && onlineNow.Contains(Sel))
+                {
+                    string why;
+                    var level = ToolsStatus(out why);
+                    if (level == ToolsLevel.Missing) lblSheetLive.Text = ToolsHintText("Live health, injuries and moodles");
+                    else if (level != ToolsLevel.Active) lblSheetLive.Text = "Live condition: EZPZ Server Tools. " + why;
+                    lblSheetLive.ForeColor = Theme.Muted;
+                }
+                return;
+            }
             string where = lp.Vehicle != "" ? (lp.Driving ? "driving a " : "in a ") + VehicleName(lp.Vehicle) : lp.Asleep ? "asleep" : "on foot";
             double temp;
             string t = lp.Stats.TryGetValue("TEMPERATURE", out temp) ? "  ·  " + temp.ToString("0.0") + " °C" : "";

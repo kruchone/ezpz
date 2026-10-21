@@ -108,6 +108,8 @@ namespace Ezpz
                      + "ezpz downloads them, finds their mod IDs, and you tick the ones to load. Players' games download the same mods automatically when they join.",
                 Dock = DockStyle.Top, Height = 44, ForeColor = Theme.Muted
             });
+            p.Controls.Add(new Panel { Dock = DockStyle.Top, Height = 12 });
+            p.Controls.Add(BuildServerToolsCard());
             p.Controls.Add(new Label { Text = "Mods", Font = Theme.H1, Dock = DockStyle.Top, Height = 44, ForeColor = Theme.Text });
         }
 
@@ -128,6 +130,7 @@ namespace Ezpz
             RebuildModList();
             ResolveTitles(wsOrder);
             UpdateModWatchLabel();
+            RefreshServerToolsCard();
         }
 
         void ScanAll()

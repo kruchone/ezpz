@@ -34,6 +34,7 @@ namespace Ezpz
             p.Controls.Add(mapView);
 
             lblMapInfo = new Label { Dock = DockStyle.Bottom, Height = 44, ForeColor = Theme.Text, Padding = new Padding(0, 8, 0, 0), UseMnemonic = false };
+            MakeToolsHint(lblMapInfo);
             p.Controls.Add(lblMapInfo);
 
             var bar = new FlowLayoutPanel { Dock = DockStyle.Top, Height = 40, WrapContents = false };
@@ -153,7 +154,15 @@ namespace Ezpz
 
         void ShowMapInfo(MapView.Marker m)
         {
-            if (m == null) { lblMapInfo.Text = "Green: online now · grey ring: last saved position · red: dead. Click a player for details."; lblMapInfo.ForeColor = Theme.Muted; return; }
+            if (m == null)
+            {
+                string why;
+                bool missing = ToolsStatus(out why) == ToolsLevel.Missing;
+                lblMapInfo.Text = "Green: online now · grey ring: last saved position · red: dead. Click a player for details."
+                    + (missing ? "\n" + ToolsHintText("Live positions (instead of the last saved one)") : "");
+                lblMapInfo.ForeColor = Theme.Muted;
+                return;
+            }
             lblMapInfo.Text = m.Tip.Replace("\n", "   ·   ") + "   ·   at " + (int)m.X + ", " + (int)m.Y;
             lblMapInfo.ForeColor = Theme.Text;
         }

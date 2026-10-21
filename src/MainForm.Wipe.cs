@@ -57,6 +57,8 @@ namespace Ezpz
             p.Hint("New world keeps settings, mods, accounts, admins, whitelist and bans. See the presets below for exactly what each deletes.");
             chkWipeStart = Theme.Check("Start the server after the wipe", true);
             p.Add(chkWipeStart, 24);
+            var hint = p.P("With EZPZ Server Tools, players also see a countdown to the wipe (and to scheduled restarts) above their hotbar. Click to add it (Mods page).", Theme.Info);
+            MakeToolsHint(hint);
             var save = Theme.Btn("Save schedule", Theme.AccentBtn);
             save.Click += (s, e) => SaveWipeSchedule();
             p.Buttons(save);

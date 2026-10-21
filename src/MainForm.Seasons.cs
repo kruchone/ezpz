@@ -346,7 +346,7 @@ namespace Ezpz
         TextBox tbSeasonWeekly;
         readonly IdPicker[] rewardPickers = new IdPicker[4];
         readonly Label[] rewardNames = new Label[4];
-        Label lblSeasonStatus, lblSeasonActive, lblWeightsTotal;
+        Label lblSeasonStatus, lblSeasonActive, lblWeightsTotal, lblSeasonTools;
         ListView lvStandings, lvRewards, lvHall, lvAudit;
         Button btnSeasonStart, btnSeasonReset, btnSeasonAdjust, btnSeasonDq;
 
@@ -358,6 +358,8 @@ namespace Ezpz
             chkSeasons = Theme.Check("Run seasons on this server", false);
             p.Add(chkSeasons, 24);
             lblSeasonStatus = Fixed(p, 48, Theme.Text);
+            lblSeasonTools = Fixed(p, 40, Theme.Muted);
+            MakeToolsHint(lblSeasonTools);
 
             p.H2("Standings");
             lvStandings = SeasonList(new[] { "#", "Player", "Score" }.Concat(Ladder.CategoryNames).Concat(new[] { "Played", "Note" }).ToArray(),
@@ -556,10 +558,35 @@ namespace Ezpz
                     + (EndIsNear() ? "  ·  THE END IS NEAR" : "");
                 lblSeasonStatus.ForeColor = EndIsNear() ? Theme.Danger : Theme.Accent;
             }
+            ShowSeasonToolsLine();
             ShowStandings();
             ShowSeasonLists();
             UpdateSeasonButtons();
             if (season != null) RefreshStandings(false);
+        }
+
+        // Whether players can see the season in game, which takes EZPZ Server Tools.
+        void ShowSeasonToolsLine()
+        {
+            if (lblSeasonTools == null) return;
+            string why;
+            var level = ToolsStatus(out why);
+            switch (level)
+            {
+                case ToolsLevel.Active:
+                    lblSeasonTools.Text = "In game: players see the countdown, the ladder and THE END IS NEAR. EZPZ Server Tools " + why.Substring(0, 1).ToLower() + why.Substring(1);
+                    break;
+                case ToolsLevel.Missing:
+                    lblSeasonTools.Text = "In game: players don't see the season, and Slayer, Explorer and PvP can't be counted, because EZPZ Server Tools isn't installed. Click to add it (Mods page).";
+                    break;
+                case ToolsLevel.Waiting:
+                    lblSeasonTools.Text = "In game: players see the season once EZPZ Server Tools reports. It's " + why.Substring(0, 1).ToLower() + why.Substring(1);
+                    break;
+                default:
+                    lblSeasonTools.Text = "In game: " + why;
+                    break;
+            }
+            lblSeasonTools.ForeColor = ToolsColor(level == ToolsLevel.Missing ? ToolsLevel.Old : level);
         }
 
         void ShowStandings()
