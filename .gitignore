@@ -10,3 +10,6 @@ obj/
 *.user
 Thumbs.db
 Desktop.ini
+
+# packaged mod
+dist/

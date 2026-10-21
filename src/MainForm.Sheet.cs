@@ -12,7 +12,9 @@ namespace Ezpz
     public partial class MainForm
     {
         Panel sheetPanel;
-        Label lblSheetHead, lblSheetSub, lblSheetUps, lblSheetNet;
+        Label lblSheetHead, lblSheetUps, lblSheetNet;
+        LinkLabel lblSheetSub;   // the position in it links to pzmap.org
+        Dictionary<string, ServerDb.Character> dbChars = new Dictionary<string, ServerDb.Character>(StringComparer.OrdinalIgnoreCase);
         SkillsView skillsView;
         Panel skillsScroll;
         CheckBox chkAllSkills;
@@ -26,7 +28,7 @@ namespace Ezpz
         Control BuildSheet()
         {
             sheetPanel = new Panel { Dock = DockStyle.Bottom, Height = 330, BackColor = Theme.Side, Padding = new Padding(14, 10, 14, 8) };
-            var head = new Panel { Dock = DockStyle.Top, Height = 54, BackColor = Theme.Side };
+            var head = new Panel { Dock = DockStyle.Top, Height = 112, BackColor = Theme.Side };
             // name row: the name on the left, the "untrained" toggle on the right
             var nameRow = new Panel { Dock = DockStyle.Top, Height = 28, BackColor = Theme.Side };
             chkAllSkills = new CheckBox { Text = "Show untrained skills", Dock = DockStyle.Right, Width = 170, ForeColor = Theme.Muted, CheckAlign = ContentAlignment.MiddleLeft };
@@ -34,7 +36,15 @@ namespace Ezpz
             lblSheetHead = new Label { Dock = DockStyle.Fill, Font = Theme.H2, ForeColor = Theme.Text, UseMnemonic = false };
             nameRow.Controls.Add(lblSheetHead);
             nameRow.Controls.Add(chkAllSkills);
-            lblSheetSub = new Label { Dock = DockStyle.Top, Height = 24, ForeColor = Theme.Muted, UseMnemonic = false };
+            lblSheetSub = new LinkLabel
+            {
+                Dock = DockStyle.Top, Height = 24, ForeColor = Theme.Muted, UseMnemonic = false, LinkColor = Theme.Info,
+                ActiveLinkColor = Theme.Accent, VisitedLinkColor = Theme.Info, LinkBehavior = LinkBehavior.HoverUnderline
+            };
+            lblSheetSub.LinkClicked += (s, e) => Util.OpenUrl((string)e.Link.LinkData);
+            lblSheetLive = new Label { Dock = DockStyle.Top, Height = 58, ForeColor = Theme.Accent, UseMnemonic = false, AutoEllipsis = true };   // three short lines
+            head.Controls.Add(lblSheetLive);   // live condition from EZPZ Server Tools (or a hint that it needs it)
+            MakeToolsHint(lblSheetLive);
             head.Controls.Add(lblSheetSub);
             head.Controls.Add(nameRow);
             lblSheetNet = new Label { Dock = DockStyle.Bottom, Height = 36, ForeColor = Theme.Muted, UseMnemonic = false };
@@ -63,9 +73,15 @@ namespace Ezpz
         void LoadCharacters()
         {
             if (perkNamesFor != S.InstallDir) { perkNames = Characters.LoadNames(S.InstallDir); perkNamesFor = S.InstallDir; }
-            Task.Run(() => Characters.Read(S)).ContinueWith(t =>
+            var settings = S;
+            Task.Run(() => Characters.Read(settings)).ContinueWith(t =>
             {
-                if (t.Exception == null) Ui(() => { chars = t.Result; UpdateSheet(); });
+                if (t.Exception == null) Ui(() => { if (settings == S) { chars = t.Result; UpdateSheet(); } });
+            });
+            // character name, alive or dead, and last saved position from the world save
+            Task.Run(() => ServerDb.ReadCharacters(settings)).ContinueWith(t =>
+            {
+                if (t.Exception == null) Ui(() => { if (settings == S) { dbChars = t.Result; UpdateSheet(); if (currentPage == PMap) RefreshMapMarkers(); } });
             });
         }
 
@@ -84,6 +100,15 @@ namespace Ezpz
             }));
         }
 
+        // The sheet's summary line, with one part (the position) as a link.
+        void SetSheetSub(string text, string linkPart, string url)
+        {
+            lblSheetSub.Text = text;
+            lblSheetSub.Links.Clear();
+            int at = linkPart != null && url != null ? text.IndexOf(linkPart, StringComparison.Ordinal) : -1;
+            if (at >= 0) lblSheetSub.Links.Add(at, linkPart.Length, url);
+        }
+
         void UpdateSheet()
         {
             if (sheetPanel == null) return;
@@ -91,20 +116,24 @@ namespace Ezpz
             if (n == null)
             {
                 lblSheetHead.Text = "Character sheet";
-                lblSheetSub.Text = "Select a player in the list to see their character.";
+                SetSheetSub("Select a player in the list to see their character.", null, null);
                 skillsView.SetData(null, perkNames);
                 SizeSkills();
-                lblSheetUps.Text = ""; lblSheetNet.Text = "";
+                lblSheetUps.Text = ""; lblSheetNet.Text = ""; lblSheetLive.Text = "";
                 return;
             }
             CharacterSheet c;
             chars.TryGetValue(n, out c);
             bool on = onlineNow.Contains(n);
-            lblSheetHead.Text = n + (on ? "   ● online" : "");
-            lblSheetHead.ForeColor = on ? Theme.Accent : Theme.Text;
+            ServerDb.Character dbc;
+            dbChars.TryGetValue(n, out dbc);
+            lblSheetHead.Text = n + (dbc != null && dbc.Name != "" ? "   ·   " + dbc.Name : "") + (dbc != null && dbc.Dead ? "   ✝ dead" : "") + (on ? "   ● online" : "");
+            lblSheetHead.ForeColor = dbc != null && dbc.Dead ? Theme.Danger : on ? Theme.Accent : Theme.Text;
+            string savedAt = dbc != null && (dbc.X != 0 || dbc.Y != 0) ? (int)dbc.X + ", " + (int)dbc.Y : null;
             if (c == null)
             {
-                lblSheetSub.Text = "No character data yet. The server records skills when a player logs in or levels up.";
+                if (savedAt != null) SetSheetSub("No skill data yet   ·   last saved at " + savedAt + (dbc.Z >= 1 ? " (floor " + (int)dbc.Z + ")" : ""), savedAt, Util.MapUrl(savedAt));
+                else SetSheetSub("No character data yet. The server records skills when a player logs in or levels up.", null, null);
                 skillsView.SetData(null, perkNames);
                 lblSheetUps.Text = "";
             }
@@ -114,12 +143,20 @@ namespace Ezpz
                 var parts = new List<string>();
                 parts.Add("Survived " + (days > 0 ? days + " day" + (days == 1 ? "" : "s") + ", " : "") + (c.HoursSurvived % 24) + " h (in-game)");
                 parts.Add(c.Characters == 1 ? "first character" : "character #" + c.Characters + " (" + (c.Characters - 1) + " earlier one" + (c.Characters == 2 ? "" : "s") + " died)");
-                if (c.Position != "")
+                string spot = null;
+                if (savedAt != null)
+                {
+                    // the world save is newer than the log's login/level-up snapshots
+                    spot = savedAt;
+                    parts.Add((on ? "around " : "last saved at ") + spot + (dbc.Z >= 1 ? " (floor " + (int)dbc.Z + ")" : ""));
+                }
+                else if (c.Position != "")
                 {
                     var xyz = c.Position.Split(',');
-                    parts.Add((on ? "last logged at " : "last seen at ") + xyz[0] + ", " + (xyz.Length > 1 ? xyz[1] : "") + (xyz.Length > 2 && xyz[2] != "0" ? " (floor " + xyz[2] + ")" : "") + ", " + FriendlyTime(c.LastSeen));
+                    spot = xyz[0] + ", " + (xyz.Length > 1 ? xyz[1] : "");
+                    parts.Add((on ? "last logged at " : "last seen at ") + spot + (xyz.Length > 2 && xyz[2] != "0" ? " (floor " + xyz[2] + ")" : "") + ", " + FriendlyTime(c.LastSeen));
                 }
-                lblSheetSub.Text = string.Join("   ·   ", parts);
+                SetSheetSub(string.Join("   ·   ", parts), spot, spot != null ? Util.MapUrl(spot) : null);
                 skillsView.ShowAll = chkAllSkills.Checked;
                 skillsView.SetData(c.Skills, perkNames);
                 var ups = c.LevelUps.AsEnumerable().Reverse().Take(6).ToList();
@@ -137,6 +174,7 @@ namespace Ezpz
             else if (on && server.MetricsPort <= 0)
                 lblSheetNet.Text = "Per-player network figures appear once the server has been started by this version of ezpz.";
             else lblSheetNet.Text = "";
+            UpdateSheetLive();
             lblSheetNet.Visible = lblSheetNet.Text != "";
             lblSheetUps.Visible = lblSheetUps.Text != "";
             SizeSkills();

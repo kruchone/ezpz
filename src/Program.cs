@@ -19,11 +19,16 @@ namespace Ezpz
             try { SetProcessDPIAware(); } catch { }
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+            AppLog.StartSession();
             Application.ThreadException += (s, e) =>
-                MessageBox.Show("Unexpected error:\n\n" + e.Exception.Message, "ezpz", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            string serverName = "";
-            try { serverName = AppSettings.Load().ServerName; } catch { }
-            var splash = Splash.Start(serverName);
+            {
+                AppLog.Error("the window", e.Exception);
+                MessageBox.Show("Unexpected error:\n\n" + e.Exception.Message + "\n\nThe details are in ezpz's log (Console page > ezpz log):\n" + AppLog.TodayPath
+                    + "\n\nPlease include it if you report this.", "ezpz", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            };
+            AppDomain.CurrentDomain.UnhandledException += (s, e) => AppLog.Error("ezpz (crash)", e.ExceptionObject as Exception);
+            System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (s, e) => { AppLog.Error("a background task", e.Exception); e.SetObserved(); };
+            var splash = Splash.Start();
 
             MainForm f;
             try
@@ -35,6 +40,7 @@ namespace Ezpz
             }
             catch (Exception ex)
             {
+                AppLog.Error("startup", ex);
                 splash.Fatal(ex);
                 return;
             }

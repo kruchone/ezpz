@@ -28,12 +28,50 @@ namespace Ezpz
         public bool UpdateOnRestart = false;
         public bool BackupOnStart = true;
         public int KeepAutoBackups = 10;
+        public int KeepWipeBackups = 6;                // backups made before scheduled wipes
         public int BackupMode = -1;          // 0 = ezpz, 1 = PZ's built-in, 2 = both; -1 = not chosen yet
         public int BackupEveryHours = 0;     // ezpz backups while the server runs (0 = only on start)
         public int ModUpdateAction = 1;    // 0 = just tell me, 1 = restart after a 5-minute warning, 2 = restart when nobody is online
         public int ModCheckMinutes = 10;
         public string DiscordWebhookProtected = "";   // encrypted like the admin password
         public int DiscordEvents = 0x7F;               // DiscordEvent flags to post
+        public string SummaryTime = "23:59";           // when the daily summary posts (local time)
+        public bool PortsForwarded = false;            // the admin says the router forwards the UDP ports (ezpz can't test that from inside)
+        public bool FirstStartDone = false;            // the server has started for real at least once (setup's last step)
+        public bool WizardPending = false;             // show the setup wizard (new servers)
+        public bool SeasonsEnabled = false;            // seasons and the ladder (needs scheduled wipes; see Ladder)
+        public string SeasonWeights = "30,20,20,10,10,10,0";   // Endurance, Skills, Slayer, Explorer, Resilience, Final Stand, PvP
+        public int SeasonMinHours = 3;                 // hours played to qualify
+        public int SeasonKillCap = 300;                // kills per hour played that count
+        public bool SeasonExcludeStaff = true;
+        public bool SeasonExcludeCheats = true;        // god mode, invisibility, no-clip
+        public bool SeasonShowLadder = true;           // players see standings mid-season
+        public int SeasonEndHours = 24;                // THE END IS NEAR: real hours before the season-ending wipe
+        public int SeasonWeeklyDay = 0;                // weekly Discord standings: 0 = Sunday
+        public string SeasonWeeklyTime = "20:00";
+        // THE END IS NEAR, the finale (see MainForm.Finale)
+        public bool FinaleHordes = false;
+        public int FinaleHordeLevel = 1;               // 0 light, 1 heavy, 2 brutal
+        public bool FinaleStorm = false;
+        public bool FinaleChopper = false;
+        public bool FinaleExtraction = false;          // last helicopter out
+        public int FinaleExtractionRadius = 50;        // tiles
+        public string FinaleExtractionPoint = "";      // "x,y", or empty for automatic
+        public bool FinaleDoublePoints = false;
+        public string SeasonRewards = "Base.Medal_Gold;Base.Medal_Silver;Base.Medal_Bronze;Base.TrophyGold";   // 1st, 2nd, 3rd, each title
+        public bool WipeEnabled = false;               // scheduled wipes (see WipeSchedule)
+        public int WipeRepeat = 0;                     // 0 = every month on WipeDay, 1 = every WipeWeeks weeks on WipeWeekday
+        public int WipeDay = 1;                        // 1-28
+        public int WipeWeeks = 2;                      // 1-12
+        public int WipeWeekday = 6;                    // 0 = Sunday ... 6 = Saturday
+        public string WipeTime = "18:00";
+        public int WipePreset = 0;                     // 0 = new world, 1 = fresh map keep characters, 2 = new world + wipe accounts
+        public bool WipeStartAfter = true;
+        public string WipeLast = "";                   // when the last scheduled wipe ran ("o" format)
+        public string WipeDue = "";                    // the wipe ezpz is waiting for; in the past = it was missed
+        public bool DiscordBotEnable = false;          // ezpz's own bot connection: commands and whitelist requests
+        public string DiscordAdminRole = "";           // role name allowed to run admin commands (besides Administrators)
+        public string DiscordRequestChannel = "";      // channel name where whitelist requests are posted for admins
 
         // Which profile file this is (a property, so it isn't written into the file).
         public string ProfileId { get; set; }
@@ -374,6 +412,22 @@ namespace Ezpz
 
     public static class Util
     {
+        static readonly Regex MapXY = new Regex(@"(-?\d+)(?:\.\d+)?\s*,\s*(-?\d+)");
+
+        // pzmap.org link for a game position like "10622,9722,0" or "10612.4,9701.8"; null if there's none
+        public static string MapUrl(string where)
+        {
+            var m = MapXY.Match(where ?? "");
+            return m.Success ? "https://pzmap.org/?" + m.Groups[1].Value + "x" + m.Groups[2].Value : null;
+        }
+
+        // Opens a web page in the default browser.
+        public static void OpenUrl(string url)
+        {
+            try { System.Diagnostics.Process.Start(url); }
+            catch (Exception ex) { System.Windows.Forms.MessageBox.Show("Couldn't open " + url + ": " + ex.Message, "ezpz"); }
+        }
+
         // Windows command-line quoting (MSVCRT rules) for arguments passed to java.exe
         public static string QuoteArg(string a)
         {

@@ -14,7 +14,7 @@ namespace Ezpz
     public partial class MainForm
     {
         CheckBox chkAutoRestart, chkUpdateOnRestart, chkBackupOnStart;
-        NumericUpDown numRestartHours, numKeepBackups;
+        NumericUpDown numRestartHours, numKeepBackups, numKeepWipeBackups;
         Action stateHandler, crashHandler;
 
         void WireServer(ServerController c, bool on)
@@ -55,7 +55,7 @@ namespace Ezpz
             if (busy != null) { Warn("Please wait: " + busy); return; }
             if (!LeaveCheck()) return;
             if (modsDirty && !Confirm("You have unsaved changes on the Mods page. Discard them and switch servers?")) return;
-            if (SandboxDirty && !Confirm("You have unsaved changes on the Sandbox page. Discard them and switch servers?")) return;
+            if (SandboxDirty && !Confirm("You have unsaved changes on the World rules page. Discard them and switch servers?")) return;
             if (server.State != ServerState.Stopped)
             {
                 if (!Confirm("\"" + S.ServerName + "\" is running. Only one server runs at a time.\n\nStop it (saving the world) and switch?")) return;
@@ -63,6 +63,8 @@ namespace Ezpz
                 if (server.State != ServerState.Stopped) return;
             }
 
+            SaveMemHistory();   // and the seasons, so nothing from the old server is lost
+            if (seasonsDirty) SaveSeasons();
             WireServer(server, false);
             S = AppSettings.Load(id);
             AppSettings.ActiveProfileId = id;
@@ -87,6 +89,8 @@ namespace Ezpz
             modsLoaded = false; modsDirty = false;
             lastRun = new ModConfig.RunStatus();
             gcReader = new GcLogReader();
+            memHistory = MemoryHistory.Load(S.ProfileId); memSavedAt = DateTime.Now;
+            BackfillMemHistory();
             lock (liveStats) liveStats.Clear();
             lastStatsPoll = DateTime.MinValue;
             ebsKhz = null; ebsLookedUp = false;
@@ -97,8 +101,13 @@ namespace Ezpz
             sandbox = null;
             dcLoaded = false;
             feed.Reset();
-            logData = new LogViewerData(); logAll = new List<LogEntry>(); logShown = new List<LogEntry>(); logLoadedAt = DateTime.MinValue;
+            logData = new LogViewerData(); logAll = new List<LogEntry>(); logLoadedAt = DateTime.MinValue;
+            FilterLogs();   // empties the Logs list too, so it doesn't point past the new (empty) data
+            LoadDiscordState();
+            LoadSeasons();
+            live = null; localMods = new List<ModEntry>(); mapLoadedFor = null;
             chars = new Dictionary<string, CharacterSheet>(StringComparer.OrdinalIgnoreCase); traffic = null; trafficAt = DateTime.MinValue;
+            dbChars = new Dictionary<string, ServerDb.Character>(StringComparer.OrdinalIgnoreCase); tickets = new List<ServerDb.Ticket>(); bans = new List<ServerDb.Ban>(); UpdateModerationButtons();
             playersBaseline = false; notifiedBuild = null; healthNotifiedRun = DateTime.MinValue; lastNotifiedState = ServerState.Stopped;
             modsOutdated = new List<string>(); modsMissing = new List<string>();
             lastModCheck = DateTime.MinValue; modRestartAt = null; modRestartWhenEmpty = false; modCheckError = null;
@@ -116,15 +125,18 @@ namespace Ezpz
             cbBranch.Text = S.Branch;
             nMinRam.Value = Math.Max(nMinRam.Minimum, Math.Min(nMinRam.Maximum, S.MinRamGB));
             nMaxRam.Value = Math.Max(nMaxRam.Minimum, Math.Min(nMaxRam.Maximum, S.MaxRamGB));
+            SyncMemoryFields();
             chkAutoRestart.Checked = S.AutoRestart;
             numRestartHours.Value = Math.Max(numRestartHours.Minimum, Math.Min(numRestartHours.Maximum, S.RestartHours));
             chkUpdateOnRestart.Checked = S.UpdateOnRestart;
             chkBackupOnStart.Checked = S.BackupOnStart;
+            chkPortsForwarded.Checked = S.PortsForwarded;
             numKeepBackups.Value = Math.Max(numKeepBackups.Minimum, Math.Min(numKeepBackups.Maximum, S.KeepAutoBackups));
             cbModAction.SelectedIndex = Math.Max(0, Math.Min(2, S.ModUpdateAction));
             LoadBackupSettings();
             lastBackupAt = DateTime.MinValue;
             LoadDiscordControls();
+            LoadWipeControls();
         }
 
         // ---------- add / remove
@@ -138,15 +150,11 @@ namespace Ezpz
                 created = d.Result;
             }
             created.ProfileId = AppSettings.NewProfileId(created.ServerName);
+            created.WizardPending = true;
             created.Save();
             Log("[ezpz] Added server \"" + created.ServerName + "\".");
             await SwitchServer(created.ProfileId);
-            if (S.ProfileId == created.ProfileId)
-            {
-                ShowPage(PSetup);
-                Info("Server \"" + S.ServerName + "\" added. Set its admin password and work through the Setup checklist."
-                    + (File.Exists(S.StartBat) ? "" : " It needs its own install, so start with 'Install / Update server'."));
-            }
+            if (S.ProfileId == created.ProfileId) ShowWizard();
         }
 
         async Task RemoveCurrentServer()

@@ -34,13 +34,17 @@ namespace Ezpz
         static readonly Regex ChatMsg = new Regex(@"Got message:ChatMessage\{chat=([^,]*), author='([^']*)', text='(.*)'\}");
         static readonly Regex Alert = new Regex(@"Server alert message: '(.*)' sent");
         static readonly Regex Quoted = new Regex("\"([^\"]{1,40})\"");
-        static readonly Regex Pos = new Regex(@"(-?\d+),(-?\d+),(-?\d+)");
+        static readonly Regex Pos = new Regex(@"(?<![\d.])-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?(?:,-?\d+)?(?![\d.])");   // x,y[,z], sometimes with decimals
         static readonly Regex Safety = new Regex("Safety: \"([^\"]+)\" \\(([^)]*)\\) (store|restore) (true|false)");
         static readonly Regex UserLine = new Regex("^\\d+ \"([^\"]+)\" (.*?)\\.?$");
         static readonly Regex ConsoleCmd = new Regex("command entered via (server console \\(System\\.in\\)|RCON[^:]*|[^:]+): \"(.*)\"");
         static readonly Regex Bracket = new Regex(@"\[([^\]]*)\]");
         // ezpz's own background checks; not moderation history
         static readonly Regex Polling = new Regex(@"^(players|stats \w+ all|stats \w+ list)$");
+
+        // The Logs page shows the last KeepDays days: the game keeps every run's logs forever, and holding them
+        // all in memory would grow without end on a long-lived server. (Older logs stay on disk.)
+        public const int KeepDays = 30;
 
         public List<LogEntry> Load(AppSettings s, Dictionary<string, string> perkNames)
         {
@@ -55,6 +59,7 @@ namespace Ezpz
                 seen.Add(f);
                 FileInfo fi;
                 try { fi = new FileInfo(f); } catch { continue; }
+                if (fi.LastWriteTime < DateTime.Now.AddDays(-KeepDays)) continue;
                 FileCache c;
                 if (!cache.TryGetValue(f, out c) || c.Mtime != fi.LastWriteTimeUtc || c.Size != fi.Length)
                 {

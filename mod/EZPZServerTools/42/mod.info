@@ -1,0 +1,8 @@
+name=EZPZ Server Tools
+id=EZPZServerTools
+description=Companion mod for ezpz, the Project Zomboid server manager. Shows players the restart and wipe countdowns, the season ladder and THE END IS NEAR, and lets the server's admins see each online player's health, injuries, moodles and position on the ezpz dashboard. No items, no gameplay changes. Needs ezpz on the server PC to be useful.
+poster=poster.png
+modversion=0.3.0
+versionMin=42.0
+author=kruchone
+url=https://github.com/kruchone/ezpz

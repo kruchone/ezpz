@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -14,8 +16,9 @@ namespace Ezpz
     {
         Page pgDiscord;
         CheckBox chkDcEnable;
-        TextBox tbDcToken, tbDcChat, tbDcLog, tbDcCmd, tbWebhook;
-        Label lblDcCheck, lblWebhookState;
+        TextBox tbDcToken, tbDcChat, tbDcLog, tbDcCmd, tbWebhook, tbSummaryTime, tbAdminRole, tbReqChannel;
+        Label lblDcCheck, lblWebhookState, lblBotState;
+        CheckBox chkBotEnable;
         readonly Dictionary<DiscordEvent, CheckBox> dcEventChecks = new Dictionary<DiscordEvent, CheckBox>();
 
         static readonly KeyValuePair<DiscordEvent, string>[] DcEvents =
@@ -27,6 +30,13 @@ namespace Ezpz
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Updates, "Game or mod update available"),
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Players, "Players joining and leaving"),
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Health, "Memory problems"),
+            new KeyValuePair<DiscordEvent, string>(DiscordEvent.Tickets, "New tickets (help requests players file in game)"),
+            new KeyValuePair<DiscordEvent, string>(DiscordEvent.Wipes, "Scheduled wipes: warnings 3 days, 1 day and 1 hour before, and when the fresh world is up"),
+            new KeyValuePair<DiscordEvent, string>(DiscordEvent.Seasons, "Seasons (beta): weekly standings, THE END IS NEAR, and the final podium"),
+            new KeyValuePair<DiscordEvent, string>(DiscordEvent.Deaths, "Player deaths"),
+            new KeyValuePair<DiscordEvent, string>(DiscordEvent.Milestones, "Survival milestones (7, 14, 30, 60, 100, 180 and 365 days)"),
+            new KeyValuePair<DiscordEvent, string>(DiscordEvent.Status, "A live status message that edits itself (online, players, uptime). Replaces the online, stopped and join posts"),
+            new KeyValuePair<DiscordEvent, string>(DiscordEvent.Summary, "A daily summary: peak players, who played, zombies killed, deaths, uptime"),
         };
 
         void BuildDiscord()
@@ -41,7 +51,7 @@ namespace Ezpz
             Step(p, "1.  Open the Discord Developer Portal and click New Application. Name it after your server.", "Discord Developer Portal", "https://discord.com/developers/applications");
             Step(p, "2.  In the Bot tab, click Reset Token, then Copy, and paste it into Bot token below. Treat it like a password: anyone with it controls the bot.", null, null);
             Step(p, "3.  Still in the Bot tab, under Privileged Gateway Intents, turn on Message Content Intent and click Save. Without it, chat from Discord can't reach the game.", null, null);
-            Step(p, "4.  In OAuth2 → URL Generator, tick the scope \"bot\", then the permissions View Channels, Send Messages and Read Message History. Open the generated link, pick your Discord server and click Authorize.", null, null);
+            Step(p, "4.  Click Invite bot below. ezpz builds the invite link with everything the bot needs and opens it in your browser: pick your Discord server and click Authorize.", null, null);
             Step(p, "5.  In your Discord server, create text channels for the bridge (for example pz-chat, pz-log and pz-commands) and type their names below exactly, without the #. Make the commands channel visible to admins only: messages there run as server commands.", null, null);
             Step(p, "6.  Save, click Check setup, then restart the server.", null, null);
             p.Y += 6;
@@ -64,7 +74,9 @@ namespace Ezpz
             saveBot.Click += (s, e) => SaveDiscordAll();
             var check = Theme.Btn("Check setup");
             check.Click += async (s, e) => await CheckDiscordBot();
-            p.Buttons(saveBot, check);
+            var invite = Theme.Btn("Invite bot");
+            invite.Click += async (s, e) => await InviteBot();
+            p.Buttons(saveBot, check, invite);
             lblDcCheck = Fixed(p, 120, Theme.Muted);
             p.P("The game reads the token from the server's .ini file, so it's stored there in plain text. Don't share that file.");
 
@@ -91,7 +103,11 @@ namespace Ezpz
                 p.Y += 26;
                 dcEventChecks[ev.Key] = c;
             }
-            p.Y += 6;
+            // with the live status message on, online / stopped / joins and leaves are shown there instead
+            dcEventChecks[DiscordEvent.Status].CheckedChanged += (s, e) => ShowCoveredByStatus();
+            p.Y += 4;
+            tbSummaryTime = p.Row("Daily summary time", Theme.Box(""), 70);
+            p.Hint("24-hour time on this PC, like 23:59. Deaths and milestones need the server's PerkLogs setting on (it is by default).");
             var saveHook = Theme.Btn("Save", Theme.AccentBtn);
             saveHook.Click += (s, e) => SaveDiscordAll();
             var test = Theme.Btn("Send test message");
@@ -99,14 +115,37 @@ namespace Ezpz
             p.Buttons(saveHook, test);
             lblWebhookState = Fixed(p, 30, Theme.Muted);
 
-            // ---------------------------------------------------------------- ideas
-            p.H2("Ideas for later");
-            p.P("• A live status message that edits itself in place (online or offline, players, uptime) instead of new posts.\n"
-              + "• Control from Discord: /status, /restart and /backup through an ezpz bot, limited to an admin role.\n"
-              + "• A daily summary: peak players, zombies killed, deaths, uptime.\n"
-              + "• Whitelist requests made in Discord and approved in ezpz.\n"
-              + "• Death announcements and milestones (\"Rick survived 30 days\") from the game's player logs.");
+            // ---------------------------------------------------------------- ezpz's bot
+            p.H2("3. Discord commands and whitelist requests (ezpz's bot)");
+            p.P("ezpz connects with the same bot as the chat bridge (the bot token in section 1), so there's nothing new to create. It adds slash commands to your Discord server. Everyone can use /status, and players ask for an account with /whitelist. /start, /restart and /backup are for admins. ezpz has to be running for them to work, but the game server doesn't.");
+            p.P("If you invited the bot before this was added, click Invite bot in section 1 again so the commands show up.");
+            chkBotEnable = Theme.Check("Turn on ezpz's bot", false);
+            p.Add(chkBotEnable, 24);
+            tbAdminRole = p.Row("Admin role name", Theme.Box(""), 240);
+            p.Hint("People with this Discord role can use the admin commands and approve requests. Discord server administrators always can.");
+            tbReqChannel = p.Row("Requests channel name", Theme.Box(""), 240);
+            p.Hint("Whitelist requests are posted here with Approve and Deny buttons, so make it admins-only. Don't use the command channel: the game runs everything posted there as a server command. You can also approve requests on the Players page.");
+            var saveBot2 = Theme.Btn("Save", Theme.AccentBtn);
+            saveBot2.Click += (s, e) => SaveDiscordAll();
+            p.Buttons(saveBot2);
+            lblBotState = Fixed(p, 40, Theme.Muted);
+            p.P("Whitelist requests only apply when the server isn't open to everyone (\"Anyone can join\" off on the Settings page). Approving one creates the account with a random password, and the bot sends it to the player privately.");
             p.End();
+            FormClosed += (s, e) => DiscordShutdown();
+        }
+
+        void ShowCoveredByStatus()
+        {
+            bool live = dcEventChecks[DiscordEvent.Status].Checked;
+            foreach (var kv in dcEventChecks)
+            {
+                if ((CoveredByStatus & kv.Key) == 0) continue;
+                string label = DcEvents.First(x => x.Key == kv.Key).Value;
+                // locked rather than disabled: Windows draws disabled check boxes in a dark grey that's unreadable here
+                kv.Value.AutoCheck = !live;
+                kv.Value.ForeColor = live ? Theme.Muted : Theme.Text;
+                kv.Value.Text = live ? label + "  (shown in the live status message instead)" : label;
+            }
         }
 
         void Step(Page p, string text, string linkText, string url)
@@ -146,6 +185,12 @@ namespace Ezpz
             if (tbWebhook == null) return;
             tbWebhook.Text = S.DiscordWebhook;
             foreach (var kv in dcEventChecks) kv.Value.Checked = (S.DiscordEvents & (int)kv.Key) != 0;
+            tbSummaryTime.Text = S.SummaryTime;
+            ShowCoveredByStatus();
+            chkBotEnable.Checked = S.DiscordBotEnable;
+            tbAdminRole.Text = S.DiscordAdminRole;
+            tbReqChannel.Text = S.DiscordRequestChannel;
+            UpdateBotLabel();
             lblWebhookState.Text = S.DiscordWebhook == "" ? "Not set up." : "Set up. Posting " + dcEventChecks.Count(kv => kv.Value.Checked) + " kinds of events.";
         }
 
@@ -161,6 +206,8 @@ namespace Ezpz
                 || tbDcLog.Text.Trim().TrimStart('#') != ini.Get("DiscordLogChannel", "").Trim()
                 || tbDcCmd.Text.Trim().TrimStart('#') != ini.Get("DiscordCommandChannel", "").Trim())) return true;
             if (tbWebhook.Text.Trim() != S.DiscordWebhook) return true;
+            if (tbSummaryTime.Text.Trim() != S.SummaryTime || chkBotEnable.Checked != S.DiscordBotEnable
+                || tbAdminRole.Text.Trim() != S.DiscordAdminRole || tbReqChannel.Text.Trim().TrimStart('#') != S.DiscordRequestChannel) return true;
             int mask = 0;
             foreach (var kv in dcEventChecks) if (kv.Value.Checked) mask |= (int)kv.Key;
             return mask != S.DiscordEvents;
@@ -229,9 +276,48 @@ namespace Ezpz
             lblDcCheck.ForeColor = result.Any(l => l.StartsWith("✕")) ? Theme.Warn : Theme.Accent;
         }
 
+        // Opens (and copies) the invite link for the bot token in the box.
+        async Task InviteBot()
+        {
+            lblDcCheck.ForeColor = Theme.Muted;
+            lblDcCheck.Text = "Asking Discord for the bot's id…";
+            string token = tbDcToken.Text;
+            try
+            {
+                string url = await Task.Run(() => DiscordBotCheck.InviteUrl(token));
+                try { Clipboard.SetText(url); } catch { }
+                Util.OpenUrl(url);
+                lblDcCheck.ForeColor = Theme.Accent;
+                lblDcCheck.Text = "Opened the invite link in your browser (it's also copied). Pick your Discord server and click Authorize.\n"
+                    + "It asks for View Channels, Send Messages, Read Message History and Embed Links, plus slash commands. If the bot is already in your server, this just updates what it's allowed to do.";
+            }
+            catch (Exception ex)
+            {
+                lblDcCheck.ForeColor = Theme.Warn;
+                lblDcCheck.Text = "✕ " + ex.Message;
+            }
+        }
+
         bool ReadWebhookForm(out string url)
         {
             url = tbWebhook.Text.Trim();
+            TimeSpan at;
+            if (!Regex.IsMatch(tbSummaryTime.Text.Trim(), @"^\d{1,2}:\d\d$") || !TimeSpan.TryParse(tbSummaryTime.Text.Trim(), CultureInfo.InvariantCulture, out at) || at.TotalHours >= 24)
+            {
+                Warn("The daily summary time should look like 23:59 (24-hour).");
+                return false;
+            }
+            string req = tbReqChannel.Text.Trim().TrimStart('#');
+            if (req != "" && req.Equals(tbDcCmd.Text.Trim().TrimStart('#'), StringComparison.OrdinalIgnoreCase))
+            {
+                Warn("The requests channel can't be the command channel: the game runs everything posted there as a server command. Pick another channel.");
+                return false;
+            }
+            if (chkBotEnable.Checked && tbDcToken.Text.Trim() == "")
+            {
+                Warn("ezpz's bot uses the bot token from section 1. Set that up first.");
+                return false;
+            }
             if (url != "" && !DiscordWebhook.UrlPattern.IsMatch(url))
             {
                 Warn("That doesn't look like a Discord webhook URL. It should start with https://discord.com/api/webhooks/");
@@ -248,8 +334,14 @@ namespace Ezpz
             int mask = 0;
             foreach (var kv in dcEventChecks) if (kv.Value.Checked) mask |= (int)kv.Key;
             S.DiscordEvents = mask;
+            S.SummaryTime = tbSummaryTime.Text.Trim();
+            S.DiscordBotEnable = chkBotEnable.Checked;
+            S.DiscordAdminRole = tbAdminRole.Text.Trim();
+            S.DiscordRequestChannel = tbReqChannel.Text.Trim().TrimStart('#');
             S.Save();
             LoadDiscordControls();
+            statusLastKey = "";
+            EnsureBot();
             Log("[ezpz] Saved Discord notification settings.");
         }
 
@@ -272,7 +364,14 @@ namespace Ezpz
 
         // ---------- posting events
 
-        bool DiscordWants(DiscordEvent ev) { return S.DiscordWebhook != "" && (S.DiscordEvents & (int)ev) != 0; }
+        // The live status message already shows online / offline and who's playing, so those don't also get their own posts.
+        const DiscordEvent CoveredByStatus = DiscordEvent.Online | DiscordEvent.Stopped | DiscordEvent.Players;
+
+        bool DiscordWants(DiscordEvent ev)
+        {
+            if (S.DiscordWebhook == "" || (S.DiscordEvents & (int)ev) == 0) return false;
+            return (CoveredByStatus & ev) == 0 || (S.DiscordEvents & (int)DiscordEvent.Status) == 0;
+        }
 
         DateTime lastDiscordError = DateTime.MinValue;
 
@@ -303,6 +402,7 @@ namespace Ezpz
 
         void DiscordOnState(ServerState st)
         {
+            WipeOnState(st);
             var was = lastNotifiedState;
             lastNotifiedState = st;
             if (st == ServerState.Running && was != ServerState.Running)
@@ -322,15 +422,25 @@ namespace Ezpz
 
         void DiscordTick()
         {
+            if (ticks % 10 == 1) EnsureBot();
+            if (ticks % 10 == 2) UpdateBotLabel();
+            BotRestartTick();
+            WipeTick();
+            if (ticks % 10 == 7) SeasonTick();
+            DayTick();
+            if (ticks % 10 == 5) PerkTick();
+            if (ticks % 5 == 3) StatusTick();
+            if (ticks % 30 == 20) TicketTick();
+            if (ticks % 5 == 4) LiveTick();
             if (S.DiscordWebhook == "" || server.State != ServerState.Running) return;
             if (DiscordWants(DiscordEvent.Health) && ticks % 60 == 0)
             {
-                var gc = gcReader.Read(S.GcLogPath);
-                if ((gc.Stalls >= 3 || gc.OutOfMemory) && healthNotifiedRun != gc.RunStart)
+                var gc = ReadGc();
+                if ((gc.RecentStalls(DateTime.Now, 6).Count >= 3 || gc.OutOfMemory) && healthNotifiedRun != gc.RunStart)
                 {
                     healthNotifiedRun = gc.RunStart;
                     Notify(DiscordEvent.Health, "⚠️ " + ServerTitle() + " is short of memory",
-                        "The game paused " + gc.Stalls + " times waiting for memory, which players feel as lag. Raise the max memory in ezpz (Setup page).", DcAmber);
+                        "The game paused " + gc.RecentStalls(DateTime.Now, 6).Count + " times in the last 6 hours waiting for memory, which players feel as lag. Raise the max memory in ezpz (Setup page).", DcAmber);
                 }
             }
         }
@@ -338,6 +448,8 @@ namespace Ezpz
         // Called by PollOnline with the previous and current sets of online players.
         void DiscordPlayersChanged(HashSet<string> before, HashSet<string> now)
         {
+            foreach (var n in now)
+                if (!dstate.Day.Players.Contains(n, StringComparer.OrdinalIgnoreCase)) dstate.Day.Players.Add(n);
             if (!playersBaseline) { playersBaseline = true; return; }
             if (!DiscordWants(DiscordEvent.Players)) return;
             foreach (var n in now.Except(before, StringComparer.OrdinalIgnoreCase))

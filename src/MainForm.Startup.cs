@@ -16,7 +16,7 @@ namespace Ezpz
             var steps = new List<KeyValuePair<string, Action>>
             {
                 Step("Checking whether the server is already running", () => server.DetectExisting()),
-                Step("Reading the server's settings", () => { LoadConfig(); RefreshDiscord(); }),
+                Step("Reading the server's settings", () => { LoadConfig(); LoadDiscordState(); LoadSeasons(); RefreshDiscord(); }),
                 Step("Loading players", () =>
                 {
                     roster = GameData.ReadRoster(S);
@@ -24,10 +24,14 @@ namespace Ezpz
                     perkNames = Characters.LoadNames(S.InstallDir);
                     perkNamesFor = S.InstallDir;
                     chars = Characters.Read(S);
+                    dbChars = ServerDb.ReadCharacters(S);
+                    bans = ServerDb.ReadBans(S);
+                    tickets = ServerDb.ReadTickets(S);
                     bool rebuilt;
                     feed.Poll(S, out rebuilt);
                 }),
                 Step("Loading mods", () => RefreshMods(false)),
+                Step("Loading item and vehicle names", () => { catalog = ItemCatalog.Load(S); ShowPickedName(itemPicker, lblItemName); ShowPickedName(vehiclePicker, lblVehicleName); ShowRewardNames(); }),
                 Step("Loading world rules (sandbox)", () => RefreshSandbox(false)),
                 Step("Reading the world's radio and memory history", () =>
                 {
@@ -35,14 +39,16 @@ namespace Ezpz
                     string khz = GameData.FindEbs(S, out when);
                     if (khz != null) { ebsKhz = khz; ebsWhen = when; }
                     ebsLookedUp = true;
-                    gcReader.Read(S.GcLogPath);
+                    memHistory = MemoryHistory.Load(S.ProfileId);
+                    BackfillMemHistory();
+                    ReadGc();
                 }),
                 Step("Listing backups", () => RefreshBackupList()),
                 Step("Reading the server's logs", () => { logAll = logData.Load(S, perkNames); logLoadedAt = DateTime.Now; FilterLogs(); }),
                 Step("Checking Windows Firewall", () => firewallOk = CheckFirewall()),
                 // Windows only creates a control's on-screen window the first time it's shown, which is what made
                 // big pages (Sandbox has ~1,100 controls) freeze on first open. Create them all now, behind the splash.
-                Step("Preparing pages", () => { CreateHandles(this); foreach (Control pg in content.Controls) pg.PerformLayout(); }),
+                Step("Reticulating splines", () => { CreateHandles(this); foreach (Control pg in content.Controls) pg.PerformLayout(); }),
             };
 
             for (int i = 0; i < steps.Count; i++)
@@ -53,6 +59,7 @@ namespace Ezpz
                 {
                     string what = steps[i].Key.Substring(0, 1).ToLower() + steps[i].Key.Substring(1);
                     problems.Add("Failed while " + what.Replace("Checking", "checking") + ": " + Explain(ex));
+                    AppLog.Error("startup step \"" + steps[i].Key + "\"", ex);
                 }
             }
             progress("Ready", 100);
@@ -60,7 +67,6 @@ namespace Ezpz
             if (problems.Count > 0)
             {
                 foreach (var p in problems) Log("[ezpz] Startup problem: " + p);
-                WriteStartupLog(problems);
             }
             return problems;
         }
@@ -74,18 +80,6 @@ namespace Ezpz
             if (ex is DirectoryNotFoundException || ex is FileNotFoundException) return "a file or folder is missing. " + ex.Message;
             if (ex is IOException) return "a file is in use or unreadable. " + ex.Message;
             return ex.Message;
-        }
-
-        void WriteStartupLog(List<string> problems)
-        {
-            try
-            {
-                Directory.CreateDirectory(AppSettings.ManagerDir);
-                File.AppendAllText(Path.Combine(AppSettings.ManagerDir, "startup.log"),
-                    DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "  ezpz " + Program.Version + "  server " + S.ServerName + Environment.NewLine
-                    + string.Concat(problems.Select(p => "  " + p + Environment.NewLine)));
-            }
-            catch { }
         }
 
         static void CreateHandles(Control c)

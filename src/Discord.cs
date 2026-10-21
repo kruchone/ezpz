@@ -21,6 +21,13 @@ namespace Ezpz
         Updates = 16,
         Players = 32,
         Health = 64,
+        Status = 128,       // the live status message that edits itself
+        Summary = 256,      // daily summary
+        Deaths = 512,
+        Milestones = 1024,  // "Rick has survived 30 days"
+        Tickets = 2048,     // a player filed a ticket in game
+        Wipes = 4096,       // scheduled wipe warnings and "fresh world is up"
+        Seasons = 8192,     // weekly standings, THE END IS NEAR, season results
     }
 
     // Posts to a Discord webhook. One message at a time, honouring Discord's rate limits.
@@ -31,23 +38,63 @@ namespace Ezpz
 
         public static readonly Regex UrlPattern = new Regex(@"^https://(?:(?:ptb|canary)\.)?discord(?:app)?\.com/api/webhooks/\d+/[\w-]+$");
 
-        public static async Task<string> Send(string url, string title, string text, int color, string footer)
+        public static Dictionary<string, object> Embed(string title, string text, int color, string footer)
         {
-            if (string.IsNullOrEmpty(url)) return "No webhook URL set.";
-            var payload = new Dictionary<string, object>
+            return new Dictionary<string, object>
+            {
+                { "title", Clip(title, 250) },
+                { "description", Clip(text ?? "", 3900) },
+                { "color", color },
+                { "footer", new Dictionary<string, object> { { "text", Clip(footer, 200) } } },
+                { "timestamp", DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'") },
+            };
+        }
+
+        public static Task<string> Send(string url, string title, string text, int color, string footer)
+        {
+            return SendEmbed(url, Embed(title, text, color, footer));
+        }
+
+        public static async Task<string> SendEmbed(string url, Dictionary<string, object> embed)
+        {
+            var r = await Request(url, "POST", Body(embed));
+            return r.Error;
+        }
+
+        // Posts and returns the new message's id, so it can be edited later (the live status message).
+        public static async Task<Result> Post(string url, Dictionary<string, object> embed)
+        {
+            var r = await Request(url + "?wait=true", "POST", Body(embed));
+            if (r.Error == null)
+            {
+                var d = Json.DeserializeObject(r.Body) as Dictionary<string, object>;
+                object id;
+                if (d != null && d.TryGetValue("id", out id)) r.Id = Convert.ToString(id);
+            }
+            return r;
+        }
+
+        // Edits a message this webhook posted. Result.Gone means it was deleted (post a new one).
+        public static Task<Result> Edit(string url, string messageId, Dictionary<string, object> embed)
+        {
+            return Request(url + "/messages/" + messageId, "PATCH", Body(embed));
+        }
+
+        public class Result { public string Error, Body, Id; public bool Gone; }
+
+        static string Body(Dictionary<string, object> embed)
+        {
+            return Json.Serialize(new Dictionary<string, object>
             {
                 { "username", "ezpz" },
-                { "embeds", new object[] { new Dictionary<string, object>
-                    {
-                        { "title", Clip(title, 250) },
-                        { "description", Clip(text ?? "", 3900) },
-                        { "color", color },
-                        { "footer", new Dictionary<string, object> { { "text", Clip(footer, 200) } } },
-                        { "timestamp", DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'") },
-                    } } },
+                { "embeds", new object[] { embed } },
                 { "allowed_mentions", new Dictionary<string, object> { { "parse", new object[0] } } },
-            };
-            string body = Json.Serialize(payload);
+            });
+        }
+
+        static async Task<Result> Request(string url, string method, string body)
+        {
+            if (string.IsNullOrEmpty(url)) return new Result { Error = "No webhook URL set." };
             await gate.WaitAsync();
             try
             {
@@ -61,9 +108,8 @@ namespace Ezpz
                         {
                             wc.Headers[HttpRequestHeader.ContentType] = "application/json";
                             wc.Encoding = Encoding.UTF8;
-                            await wc.UploadStringTaskAsync(url, "POST", body);
+                            return new Result { Body = await wc.UploadStringTaskAsync(url, method, body) };
                         }
-                        return null;
                     }
                     catch (WebException ex)
                     {
@@ -72,19 +118,21 @@ namespace Ezpz
                         {
                             double.TryParse(r.Headers["Retry-After"], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out retryAfter);
                         }
+                        else if (r != null && method == "PATCH" && r.StatusCode == HttpStatusCode.NotFound)
+                            return new Result { Error = "The message was deleted.", Gone = true };
                         else if (r != null && (r.StatusCode == HttpStatusCode.NotFound || r.StatusCode == HttpStatusCode.Unauthorized))
-                            return "Discord says this webhook doesn't exist any more. It may have been deleted. Create a new one and paste its URL.";
-                        else return "Couldn't post to Discord: " + ex.Message;
+                            return new Result { Error = "Discord says this webhook doesn't exist any more. It may have been deleted. Create a new one and paste its URL." };
+                        else return new Result { Error = "Couldn't post to Discord: " + ex.Message };
                     }
                     // rate-limited: wait as long as Discord asks, then try again
                     await Task.Delay(TimeSpan.FromSeconds(Math.Max(1, Math.Min(30, retryAfter))));
                 }
-                return "Discord is rate-limiting messages. Try again in a minute.";
+                return new Result { Error = "Discord is rate-limiting messages. Try again in a minute." };
             }
             finally { gate.Release(); }
         }
 
-        static string Clip(string s, int n) { return s.Length <= n ? s : s.Substring(0, n - 1) + "…"; }
+        public static string Clip(string s, int n) { return s.Length <= n ? s : s.Substring(0, n - 1) + "…"; }
     }
 
     // Checks a bot token and channel names the way the game's built-in bot will use them.
@@ -113,6 +161,27 @@ namespace Ezpz
         }
 
         // Returns human-readable findings; the first line says whether the token works.
+        // View Channels, Send Messages, Embed Links, Read Message History: what the chat bridge and ezpz's bot use.
+        public const long InvitePermissions = 1024 | 2048 | 16384 | 65536;
+
+        // The link that adds the bot to a Discord server with the scopes and permissions both bots need.
+        // The application id comes from the token, so nobody has to dig through the developer portal.
+        public static string InviteUrl(string token)
+        {
+            token = (token ?? "").Trim();
+            if (token == "") throw new Exception("Paste the bot token first (step 2).");
+            object app;
+            try { app = Get(token, "/oauth2/applications/@me"); }
+            catch (WebException ex)
+            {
+                var r = ex.Response as HttpWebResponse;
+                throw new Exception(r != null && r.StatusCode == HttpStatusCode.Unauthorized
+                    ? "Discord rejected the token. Copy it again from the Bot tab (Reset Token gives a new one)."
+                    : "Couldn't reach Discord: " + ex.Message);
+            }
+            return "https://discord.com/oauth2/authorize?client_id=" + Str(app, "id") + "&scope=bot%20applications.commands&permissions=" + InvitePermissions;
+        }
+
         public static List<string> Run(string token, string[] channelNames)
         {
             var lines = new List<string>();

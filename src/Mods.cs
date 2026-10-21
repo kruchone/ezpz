@@ -32,6 +32,7 @@ namespace Ezpz
         public string VersionMin = "";
         public string[] Requires = new string[0];
         public bool HasB42;
+        public bool Local;      // from the server's own mods folder, not the Workshop
         public List<string> MapFolders = new List<string>();
     }
 
@@ -177,8 +178,22 @@ namespace Ezpz
     {
         public static List<ModEntry> Scan(AppSettings s, string workshopId)
         {
+            return ScanDir(Path.Combine(Workshop.ContentDir(s), workshopId, "mods"), workshopId);
+        }
+
+        // Mods copied straight into the server's mods folder (<data>\mods). The game loads them, but players need
+        // their own copy: servers only send Workshop mods (through Steam), never mod files.
+        public static List<ModEntry> ScanLocal(AppSettings s)
+        {
+            var list = ScanDir(Path.Combine(s.DataDir, "mods"), "");
+            list.RemoveAll(m => m.Id.Equals("examplemod", StringComparison.OrdinalIgnoreCase));   // the game's own sample
+            foreach (var m in list) m.Local = true;
+            return list;
+        }
+
+        static List<ModEntry> ScanDir(string modsDir, string workshopId)
+        {
             var list = new List<ModEntry>();
-            string modsDir = Path.Combine(Workshop.ContentDir(s), workshopId, "mods");
             if (!Directory.Exists(modsDir)) return list;
             foreach (var folder in Directory.GetDirectories(modsDir).OrderBy(d => d))
             {

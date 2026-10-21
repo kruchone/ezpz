@@ -34,6 +34,7 @@ namespace Ezpz
         // Local port of PZ's built-in Prometheus metrics server (0 = none). Picked fresh at each launch.
         public int MetricsPort { get; private set; }
         public bool StopWhenStarted;
+        public bool ConfigOnlyRun;   // this run only generates the default config (it stops itself once up)
 
         public ServerController(AppSettings s) { S = s; State = ServerState.Stopped; }
 
@@ -195,6 +196,7 @@ namespace Ezpz
             Emit(line);
             if (State == ServerState.Starting && line.IndexOf("SERVER STARTED", StringComparison.OrdinalIgnoreCase) >= 0)
             {
+                ConfigOnlyRun = StopWhenStarted;
                 SetState(ServerState.Running);
                 Emit("[ezpz] Server is up and accepting players.");
                 if (StopWhenStarted)
@@ -234,7 +236,7 @@ namespace Ezpz
                 var ini = IniFile.Load(S.IniPath);
                 int port; string pw = ini.Get("RCONPassword", "");
                 if (!int.TryParse(ini.Get("RCONPort", ""), out port) || pw == "")
-                    throw new Exception("This server was started outside the manager. Set RCONPort and RCONPassword on the Configure page (then restart once) so the manager can send commands.");
+                    throw new Exception("This server was started outside the manager. Set RCONPort and RCONPassword on the Settings page (then restart once) so the manager can send commands.");
                 if (echo) Emit("> " + cmd + "   (via RCON)");
                 string resp = Rcon.Send(port, pw, cmd);
                 if (!string.IsNullOrEmpty(resp)) Emit(resp.TrimEnd());
@@ -682,14 +684,19 @@ namespace Ezpz
             }
             log("[backup] Restored " + info.Contents + " (" + n + " files) from " + System.IO.Path.GetFileName(zip));
         }
-        public static void PruneAuto(AppSettings s, Action<string> log)
+        public static void PruneAuto(AppSettings s, Action<string> log) { Prune(s, "auto", s.KeepAutoBackups, log); }
+
+        // Scheduled wipes make a full world backup every time; keep the newest few so weekly wipes don't fill the disk.
+        public static void PruneWipe(AppSettings s, Action<string> log) { Prune(s, "pre-wipe", s.KeepWipeBackups, log); }
+
+        static void Prune(AppSettings s, string kind, int keep, Action<string> log)
         {
-            if (!Directory.Exists(s.BackupDir) || s.KeepAutoBackups <= 0) return;
-            var autos = new DirectoryInfo(s.BackupDir).GetFiles(s.ServerName + "_*_auto.zip")
-                .OrderByDescending(f => f.CreationTimeUtc).Skip(s.KeepAutoBackups).ToList();
-            foreach (var f in autos)
+            if (!Directory.Exists(s.BackupDir) || keep <= 0) return;
+            var old = new DirectoryInfo(s.BackupDir).GetFiles(s.ServerName + "_*_" + kind + ".zip")
+                .OrderByDescending(f => f.CreationTimeUtc).Skip(keep).ToList();
+            foreach (var f in old)
             {
-                try { f.Delete(); log("[backup] Pruned old auto-backup " + f.Name); } catch { }
+                try { f.Delete(); log("[backup] Pruned old " + kind + " backup " + f.Name); } catch { }
             }
         }
     }
