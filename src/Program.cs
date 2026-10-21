@@ -28,9 +28,7 @@ namespace Ezpz
             };
             AppDomain.CurrentDomain.UnhandledException += (s, e) => AppLog.Error("ezpz (crash)", e.ExceptionObject as Exception);
             System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (s, e) => { AppLog.Error("a background task", e.Exception); e.SetObserved(); };
-            string serverName = "";
-            try { serverName = AppSettings.Load().ServerName; } catch { }
-            var splash = Splash.Start(serverName);
+            var splash = Splash.Start();
 
             MainForm f;
             try

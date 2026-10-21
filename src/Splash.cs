@@ -15,12 +15,12 @@ namespace Ezpz
         SplashForm form;
         readonly ManualResetEvent ready = new ManualResetEvent(false);
 
-        public static Splash Start(string serverName)
+        public static Splash Start()
         {
             var s = new Splash();
             var t = new Thread(() =>
             {
-                s.form = new SplashForm(serverName);
+                s.form = new SplashForm();
                 s.form.Shown += (o, e) => s.ready.Set();
                 Application.Run(s.form);
             });
@@ -69,7 +69,7 @@ namespace Ezpz
         Action<bool> onChoice;
         string details = "";
 
-        public SplashForm(string serverName)
+        public SplashForm()
         {
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.CenterScreen;
@@ -92,7 +92,7 @@ namespace Ezpz
 
             lblTitle = new Label { Text = "ezpz", Font = new Font("Segoe UI Semibold", 26f), AutoSize = true, Location = new Point(150, 34), ForeColor = Theme.Text };
             var sub = new Label { Text = "Project Zomboid B42 server manager", AutoSize = true, Location = new Point(154, 84), ForeColor = Theme.Muted };
-            var ver = new Label { Text = "Version " + Program.Version + (string.IsNullOrEmpty(serverName) ? "" : "   ·   " + serverName), AutoSize = true, Location = new Point(154, 106), ForeColor = Theme.Muted };
+            var ver = new Label { Text = "Version " + Program.Version, AutoSize = true, Location = new Point(154, 106), ForeColor = Theme.Muted };
             lblStep = new Label { Text = "Starting…", AutoSize = false, Location = new Point(30, 196), Size = new Size(500, 22), ForeColor = Theme.Text };
             bar = new Panel { Location = new Point(30, 224), Size = new Size(500, 6), BackColor = Theme.Card };
             barFill = new Panel { Location = new Point(0, 0), Size = new Size(0, 6), BackColor = Theme.Accent };
