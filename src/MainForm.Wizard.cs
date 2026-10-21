@@ -68,6 +68,7 @@ namespace Ezpz
                 case 1: return File.Exists(S.StartBat);
                 case 2: return File.Exists(S.IniPath);
                 case 3: return firewallOk;
+                case 5: return S.PortsForwarded;
                 case 6: return S.FirstStartDone;
                 default: return false;   // 4 and 5 are optional
             }
@@ -238,6 +239,8 @@ namespace Ezpz
                     wzIps = WText("This PC: " + string.Join(" or ", LocalIps()) + "     Ports: UDP " + port + " and " + port2, Theme.Accent);
                     WText("In your router's settings, look for \"Port forwarding\", \"Virtual server\" or \"NAT\", and forward UDP " + port + " and " + port2 + " to this PC's address. Friends then join with your public IP and port " + port + ".");
                     WButton("Show my public IP", Theme.Card, async () => { await ShowPublicIp(); wzIps.Text = lblIps.Text; });
+                    var fwd = WRow("Done?", Theme.Check("I've forwarded these ports on my router", S.PortsForwarded), 0);
+                    fwd.CheckedChanged += (s, e) => { SetPortsForwarded(fwd.Checked); WizardRefresh(); };
                     break;
                 case 6:
                     WText("Start the server. When it says it's up, it's ready for players, and setup is done.");

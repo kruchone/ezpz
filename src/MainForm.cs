@@ -325,7 +325,22 @@ namespace Ezpz
             lblIps = p.P("");
             p.P("Generate default config: starts the server once so Project Zomboid writes its default config files, then stops it. The first start can take several minutes.");
             p.P("Router: for players outside your home network, forward UDP ports 16261 and 16262 (or whatever DefaultPort/UDPPort you set) to this PC's local IP. Friends then join with your public IP and port 16261.");
+            chkPortsForwarded = Theme.Check("I've forwarded these ports on my router", S.PortsForwarded);
+            chkPortsForwarded.CheckedChanged += (s, e) => SetPortsForwarded(chkPortsForwarded.Checked);
+            p.Add(chkPortsForwarded, 24);
+            p.P("ezpz can't check your router from inside your network, so this step goes green when you tick it. A friend joining from outside is the real test.");
             p.End();
+        }
+
+        CheckBox chkPortsForwarded;
+
+        void SetPortsForwarded(bool on)
+        {
+            if (S.PortsForwarded == on) return;
+            S.PortsForwarded = on;
+            S.Save();
+            if (chkPortsForwarded != null && chkPortsForwarded.Checked != on) chkPortsForwarded.Checked = on;
+            RefreshChecklist();
         }
 
         void BrowseFolder(TextBox tb)
@@ -389,7 +404,7 @@ namespace Ezpz
                 File.Exists(S.IniPath),
                 firewallOk,
                 File.Exists(S.IniPath) && IniFile.Load(S.IniPath).Get("PublicName", "") != "",
-                false,
+                S.PortsForwarded,
                 S.FirstStartDone || (server.State == ServerState.Running && !server.ConfigOnlyRun),
             };
             int next = -1;

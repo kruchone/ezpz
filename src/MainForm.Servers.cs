@@ -130,6 +130,7 @@ namespace Ezpz
             numRestartHours.Value = Math.Max(numRestartHours.Minimum, Math.Min(numRestartHours.Maximum, S.RestartHours));
             chkUpdateOnRestart.Checked = S.UpdateOnRestart;
             chkBackupOnStart.Checked = S.BackupOnStart;
+            chkPortsForwarded.Checked = S.PortsForwarded;
             numKeepBackups.Value = Math.Max(numKeepBackups.Minimum, Math.Min(numKeepBackups.Maximum, S.KeepAutoBackups));
             cbModAction.SelectedIndex = Math.Max(0, Math.Min(2, S.ModUpdateAction));
             LoadBackupSettings();
