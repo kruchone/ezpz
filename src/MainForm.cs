@@ -166,7 +166,7 @@ namespace Ezpz
             new object[] { PConfig, "Settings" }, new object[] { PMods, "Mods" }, new object[] { PDiscord, "Discord" }, new object[] { PBackups, "Backups" },
             new object[] { PReset, "Reset & wipes" }, new object[] { PSetup, "Setup" },
             new object[] { -1, "EXTRA" },
-            new object[] { PSeasons, "Seasons" },
+            new object[] { PSeasons, "Seasons (Beta)" },
         };
 
         void BuildNav()

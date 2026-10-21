@@ -360,8 +360,9 @@ namespace Ezpz
         void BuildSeasons()
         {
             var p = pgSeasons = NewPage();
-            p.H1("Seasons");
+            p.H1("Seasons (Beta)");
             p.P("A season runs from one scheduled wipe to the next. Players are ranked on a ladder by how well they survived all round, the last hours before the wipe are THE END IS NEAR, and the winners get a symbolic reward in the next season. With EZPZ Server Tools, players see the countdown and the ladder in game.");
+            p.P("Seasons is in beta: it works, but hasn't been through many real seasons yet. If something looks off, the audit log and ezpz's log (Console page) show what happened; please report it on GitHub.", Theme.Info);
             chkSeasons = Theme.Check("Run seasons on this server", false);
             p.Add(chkSeasons, 24);
             lblSeasonStatus = Fixed(p, 66, Theme.Text);

@@ -32,7 +32,7 @@ namespace Ezpz
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Health, "Memory problems"),
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Tickets, "New tickets (help requests players file in game)"),
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Wipes, "Scheduled wipes: warnings 3 days, 1 day and 1 hour before, and when the fresh world is up"),
-            new KeyValuePair<DiscordEvent, string>(DiscordEvent.Seasons, "Seasons: weekly standings, THE END IS NEAR, and the final podium"),
+            new KeyValuePair<DiscordEvent, string>(DiscordEvent.Seasons, "Seasons (beta): weekly standings, THE END IS NEAR, and the final podium"),
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Deaths, "Player deaths"),
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Milestones, "Survival milestones (7, 14, 30, 60, 100, 180 and 365 days)"),
             new KeyValuePair<DiscordEvent, string>(DiscordEvent.Status, "A live status message that edits itself (online, players, uptime). Replaces the online, stopped and join posts"),
