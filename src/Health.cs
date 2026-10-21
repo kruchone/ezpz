@@ -21,11 +21,19 @@ namespace Ezpz
         public int Collections, MajorCollections, Stalls, StartupStalls;
         public double LongestGcSec, StallMsTotal, StartupStallMs;
         internal DateTime lastStallAt = DateTime.MinValue;
+        // When each pause during play happened (the latest 100), so old ones can stop counting as a problem.
+        public readonly List<KeyValuePair<DateTime, double>> PlayStalls = new List<KeyValuePair<DateTime, double>>();
         internal double lastStallMs;
         internal bool lastStallStartup;
         public bool OutOfMemory;
 
         public bool HasData { get { return Collections > 0; } }
+
+        // Pauses during play within the last few hours of "now".
+        public List<KeyValuePair<DateTime, double>> RecentStalls(DateTime now, double hours)
+        {
+            return PlayStalls.Where(x => x.Key > now.AddHours(-hours)).ToList();
+        }
         // Live data after full (major) collections is the honest "how much does the world need" number.
         public long NeedMB { get { return PeakMajorAfterMB > 0 ? PeakMajorAfterMB : PeakAfterMB; } }
     }
@@ -111,13 +119,20 @@ namespace Ezpz
                     if (ms > s.lastStallMs)
                     {
                         if (startup) s.StartupStallMs += ms - s.lastStallMs; else s.StallMsTotal += ms - s.lastStallMs;
+                        if (!startup && s.PlayStalls.Count > 0) s.PlayStalls[s.PlayStalls.Count - 1] = new KeyValuePair<DateTime, double>(s.PlayStalls[s.PlayStalls.Count - 1].Key, ms);
                         s.lastStallMs = ms;
                     }
                 }
                 else
                 {
                     if (startup) { s.StartupStalls++; s.StartupStallMs += ms; }
-                    else { s.Stalls++; s.StallMsTotal += ms; }
+                    else
+                    {
+                        s.Stalls++;
+                        s.StallMsTotal += ms;
+                        s.PlayStalls.Add(new KeyValuePair<DateTime, double>(t, ms));
+                        if (s.PlayStalls.Count > 100) s.PlayStalls.RemoveAt(0);
+                    }
                     s.lastStallMs = ms;
                 }
                 s.lastStallAt = t;
@@ -163,7 +178,10 @@ namespace Ezpz
             }
             catch { }
             if (gc.OutOfMemory) p.Add("Java reported running out of memory in the memory log.");
-            if (gc.Stalls > 0) p.Add("While running, the game paused " + gc.Stalls + " time(s) waiting for memory (" + gc.StallMsTotal.ToString("0") + " ms in total). Players feel this as lag.");
+            // like the verdict: a pause counts for an hour, a run of 3+ for 6 hours
+            var recent = gc.RecentStalls(DateTime.Now, 6);
+            if (recent.Count < 3) recent = gc.RecentStalls(DateTime.Now, 1);
+            if (recent.Count > 0) p.Add("The game paused " + recent.Count + " time(s) waiting for memory (" + recent.Sum(x => x.Value).ToString("0") + " ms in total), most recently at " + recent.Last().Key.ToString("HH:mm") + ". Players feel this as lag.");
             if (deadlockedThreads > 0) p.Add("Java reports " + deadlockedThreads + " deadlocked server threads. The server is probably frozen; restart it.");
             if (crashesThisSession > 0) p.Add("The server stopped unexpectedly " + crashesThisSession + " time(s) since ezpz was opened.");
             return p;
@@ -193,7 +211,20 @@ namespace Ezpz
             int canGive = (int)Math.Floor(pcTotalGB - 4);
             double hours = gc.RunStart > DateTime.MinValue ? (gc.LastGc - gc.RunStart).TotalHours : 0;
 
-            if (gc.OutOfMemory || gc.Stalls >= 3 || gc.StallMsTotal >= 1000)
+            // Pauses count as a problem while they're recent: one shows for an hour, a run of them for 6 hours.
+            // Older ones become a note, so a single hiccup doesn't keep the warning up until the next restart.
+            var now = running ? DateTime.Now : gc.LastGc;
+            var last6h = gc.RecentStalls(now, 6);
+            var lastHour = gc.RecentStalls(now, 1);
+            string pastNote = "";
+            if (gc.Stalls > 0 && lastHour.Count == 0 && gc.PlayStalls.Count > 0)
+            {
+                var lastStall = gc.PlayStalls[gc.PlayStalls.Count - 1];
+                pastNote = " Earlier this run: " + (gc.Stalls == 1 ? "1 brief wait for memory at " + lastStall.Key.ToString("HH:mm") + " (" + lastStall.Value.ToString("0") + " ms)"
+                    : gc.Stalls + " brief waits for memory, the last at " + lastStall.Key.ToString("HH:mm")) + ", none since.";
+            }
+
+            if (gc.OutOfMemory || last6h.Count >= 3 || last6h.Sum(x => x.Value) >= 1000)
             {
                 v.Level = 3;
                 v.Title = "Too small: the server ran short of memory";
@@ -202,11 +233,11 @@ namespace Ezpz
                     ? "Raise the max memory on the Setup page from " + maxSetGB + " GB to " + target + " GB, then restart."
                     : "This PC has no spare memory to give the server. Fewer or lighter mods, fewer players, or more RAM would help.";
             }
-            else if (gc.Stalls > 0)
+            else if (lastHour.Count > 0)
             {
                 v.Level = 2;
                 v.Title = "A brief wait for memory during play";
-                v.Detail = "The game paused " + gc.Stalls + " time(s) (" + gc.StallMsTotal.ToString("0") + " ms) waiting for memory. Once in a while is OK; if it keeps happening, raise the max"
+                v.Detail = "At " + lastHour.Last().Key.ToString("HH:mm") + " the game paused " + lastHour.Count + " time(s) (" + lastHour.Sum(x => x.Value).ToString("0") + " ms) waiting for memory. Once in a while is OK; if it keeps happening, raise the max"
                     + (canGive > maxSetGB ? " to " + Math.Min(maxSetGB + 2, canGive) + " GB on the Setup page." : ", though this PC has no spare memory to give.");
             }
             else if (pct >= 0.85)
@@ -217,7 +248,7 @@ namespace Ezpz
                     ? "No pauses yet, but there's little headroom. Raising the max to " + Math.Min(maxSetGB + 2, canGive) + " GB on the Setup page would be safer."
                     : "No pauses yet, but there's little headroom, and this PC has no spare memory to give.";
             }
-            else if (pct < 0.35 && hours >= 0.5 && maxSetGB >= 6)
+            else if (pct < 0.35 && hours >= 0.5 && maxSetGB >= 6 && gc.Stalls == 0)   // no "lower it" advice after any pause
             {
                 v.Level = 1;
                 int lower = Math.Max(4, (int)Math.Ceiling(needGB * 2));
@@ -230,8 +261,9 @@ namespace Ezpz
             {
                 v.Level = 0;
                 v.Title = "Memory looks right";
-                v.Detail = "The world has needed up to " + needGB.ToString("0.0") + " GB of the " + maxGB.ToString("0") + " GB max, with no pauses waiting for memory.";
+                v.Detail = "The world has needed up to " + needGB.ToString("0.0") + " GB of the " + maxGB.ToString("0") + " GB max, with no " + (gc.Stalls > 0 ? "recent " : "") + "pauses waiting for memory.";
             }
+            if (v.Level < 2) v.Detail += pastNote;
             if (hours < 0.5 && v.Level < 3) v.Detail += " (Early days: this run is " + Math.Max(1, (int)(hours * 60)) + " min old. The verdict firms up as players explore.)";
             v.Detail += pcNote;
             return v;

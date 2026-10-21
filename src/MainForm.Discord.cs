@@ -436,11 +436,11 @@ namespace Ezpz
             if (DiscordWants(DiscordEvent.Health) && ticks % 60 == 0)
             {
                 var gc = ReadGc();
-                if ((gc.Stalls >= 3 || gc.OutOfMemory) && healthNotifiedRun != gc.RunStart)
+                if ((gc.RecentStalls(DateTime.Now, 6).Count >= 3 || gc.OutOfMemory) && healthNotifiedRun != gc.RunStart)
                 {
                     healthNotifiedRun = gc.RunStart;
                     Notify(DiscordEvent.Health, "⚠️ " + ServerTitle() + " is short of memory",
-                        "The game paused " + gc.Stalls + " times waiting for memory, which players feel as lag. Raise the max memory in ezpz (Setup page).", DcAmber);
+                        "The game paused " + gc.RecentStalls(DateTime.Now, 6).Count + " times in the last 6 hours waiting for memory, which players feel as lag. Raise the max memory in ezpz (Setup page).", DcAmber);
                 }
             }
         }
