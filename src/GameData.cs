@@ -62,6 +62,67 @@ namespace Ezpz
         }
     }
 
+    // The world's clock, from the save's map_t.bin (written whenever the server saves).
+    public class WorldClock
+    {
+        public DateTime Date;      // in-game date and time
+        public int Day;            // day N of this world, counting the start date as day 1
+        public int Nights;         // the game's own nights-survived counter
+        public DateTime SavedAt;   // when the server last wrote it
+
+        static WorldClock cached;
+        static string cachedKey;
+
+        // map_t.bin starts: "GMTM", int version, float multiplier, int nightsSurvived, int targetZombies,
+        // float lastTimeOfDay, float timeOfDay (hours), int day (0-based), int month (0-based), int year. Big-endian.
+        public static WorldClock Read(AppSettings s)
+        {
+            string path = Path.Combine(s.SaveDir, "map_t.bin");
+            try
+            {
+                if (!File.Exists(path)) return null;
+                var fi = new FileInfo(path);
+                string key = path + "|" + fi.LastWriteTimeUtc.Ticks + "|" + fi.Length;
+                if (key == cachedKey) return cached;
+                byte[] b;
+                using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                {
+                    b = new byte[Math.Min(64, fs.Length)];
+                    fs.Read(b, 0, b.Length);
+                }
+                if (b.Length < 40 || Encoding.ASCII.GetString(b, 0, 4) != "GMTM") return null;
+                Func<int, int> I = o => (b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3];
+                Func<int, float> F = o => BitConverter.ToSingle(BitConverter.GetBytes(I(o)), 0);
+                int nights = I(12), day = I(28), month = I(32), year = I(36);
+                float hours = F(24);
+                if (year < 1900 || year > 3000 || month < 0 || month > 11 || day < 0 || day >= DateTime.DaysInMonth(year, month + 1) || hours < 0 || hours >= 24) return null;
+                var c = new WorldClock { Date = new DateTime(year, month + 1, day + 1).AddHours(hours), Nights = nights, SavedAt = fi.LastWriteTime };
+                c.Day = nights + 1;
+                var start = StartDate(s);
+                if (start != null && start.Value <= c.Date.Date) c.Day = (c.Date.Date - start.Value).Days + 1;
+                cached = c; cachedKey = key;
+                return c;
+            }
+            catch { return null; }
+        }
+
+        // The world's start date from the sandbox settings (StartYear 1 = 1993).
+        static DateTime? StartDate(AppSettings s)
+        {
+            try
+            {
+                if (!File.Exists(s.SandboxPath)) return null;
+                string text = File.ReadAllText(s.SandboxPath);
+                Func<string, int> V = k => { var m = Regex.Match(text, @"\b" + k + @"\s*=\s*(\d+)"); return m.Success ? int.Parse(m.Groups[1].Value) : -1; };
+                int y = V("StartYear"), mo = V("StartMonth"), d = V("StartDay");
+                if (y < 1 || mo < 1 || mo > 12 || d < 1) return null;
+                int year = 1992 + y;
+                return new DateTime(year, mo, Math.Min(d, DateTime.DaysInMonth(year, mo)));
+            }
+            catch { return null; }
+        }
+    }
+
     public class PlayerInfo
     {
         public string Name;

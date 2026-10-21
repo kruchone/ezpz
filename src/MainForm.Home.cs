@@ -386,6 +386,8 @@ namespace Ezpz
             string port = ini.Get("DefaultPort", "16261");
             var parts = new List<string>();
             parts.Add((name != "" ? "\"" + name + "\"" : "Server") + " (ID " + S.ServerName + ")");
+            var clock = WorldClock.Read(S);   // as of the server's last save
+            if (clock != null) parts.Add("Day " + clock.Day + " · " + clock.Date.ToString("d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture));
             if (st != ServerState.Stopped)
             {
                 var up = DateTime.Now - server.StartedAt;
