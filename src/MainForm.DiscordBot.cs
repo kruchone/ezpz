@@ -408,7 +408,13 @@ namespace Ezpz
                 default: label = "🔴 Offline"; color = DcRed; break;
             }
             var lines = new List<string> { "**" + label + "**" };
-            string names = "", up = "", restart = "";
+            string names = "", up = "", restart = "", world = "";
+            var clock = WorldClock.Read(S);   // as of the server's last save, so it changes at most once per save
+            if (clock != null)
+            {
+                world = "Day " + clock.Day + " · " + clock.Date.ToString("d MMMM yyyy", CultureInfo.InvariantCulture);
+                lines.Add("**World:** " + world);
+            }
             if (st == ServerState.Running)
             {
                 var online = onlineNow.OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
@@ -428,7 +434,7 @@ namespace Ezpz
             }
             string wipe = NextWipeText();
             if (wipe != null) lines.Add("**Next wipe:** " + wipe.Substring(0, wipe.IndexOf(" (")));
-            key = label + "|" + names + "|" + up + "|" + restart + "|" + wipe;
+            key = label + "|" + names + "|" + up + "|" + restart + "|" + wipe + "|" + world;
             return DiscordWebhook.Embed(ServerTitle(), string.Join("\n", lines), color, "Live status · ezpz · " + S.ServerName);
         }
 
